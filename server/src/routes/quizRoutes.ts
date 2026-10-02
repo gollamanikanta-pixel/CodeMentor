@@ -46,12 +46,12 @@ const SELECT = `SELECT q.id, q.language, q.difficulty, q.score, q.totalQuestions
   q.conceptsToReview, q.createdAt, p.title AS projectName
   FROM QuizHistory q LEFT JOIN Project p ON p.id = q.projectId`;
 
-quizRoutes.get('/', (req: AuthRequest, res) => {
-  const rows = db.prepare(`${SELECT} WHERE q.userId=? ORDER BY q.createdAt DESC`).all(req.userId!) as unknown as QuizRow[];
+quizRoutes.get('/', async (req: AuthRequest, res) => {
+  const rows = await db.prepare(`${SELECT} WHERE q.userId=? ORDER BY q.createdAt DESC`).all<QuizRow>(req.userId!);
   return res.json({ quizzes: rows.map(toRecord) });
 });
 
-quizRoutes.post('/', (req: AuthRequest, res) => {
+quizRoutes.post('/', async (req: AuthRequest, res) => {
   const parsed = z
     .object({
       project: z.string().trim().min(1).max(120),
@@ -69,12 +69,12 @@ quizRoutes.post('/', (req: AuthRequest, res) => {
 
   // If a project is referenced, it must belong to this learner.
   if (parsed.data.projectId) {
-    const owned = db.prepare('SELECT id FROM Project WHERE id=? AND userId=?').get(parsed.data.projectId, req.userId!);
+    const owned = await db.prepare('SELECT id FROM Project WHERE id=? AND userId=?').get(parsed.data.projectId, req.userId!);
     if (!owned) return res.status(404).json({ message: 'Project not found.' });
   }
 
   const id = crypto.randomUUID();
-  db.prepare(
+  await db.prepare(
     'INSERT INTO QuizHistory (id,userId,projectId,language,difficulty,score,totalQuestions,percentage,conceptsToReview,quizData,createdAt) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
   ).run(
     id,
@@ -90,14 +90,14 @@ quizRoutes.post('/', (req: AuthRequest, res) => {
     now(),
   );
 
-  const row = db.prepare(`${SELECT} WHERE q.id=? AND q.userId=?`).get(id, req.userId!) as unknown as QuizRow;
-  return res.status(201).json({ quiz: toRecord(row) });
+  const row = await db.prepare(`${SELECT} WHERE q.id=? AND q.userId=?`).get<QuizRow>(id, req.userId!);
+  return res.status(201).json({ quiz: toRecord(row!) });
 });
 
-quizRoutes.get('/:quizId', (req: AuthRequest, res) => {
-  const row = db
+quizRoutes.get('/:quizId', async (req: AuthRequest, res) => {
+  const row = await db
     .prepare(`${SELECT} WHERE q.id=? AND q.userId=?`)
-    .get(String(req.params.quizId), req.userId!) as unknown as QuizRow | undefined;
+    .get<QuizRow>(String(req.params.quizId), req.userId!);
   if (!row) return res.status(404).json({ message: 'Quiz record not found.' });
   return res.json({ quiz: toRecord(row) });
 });

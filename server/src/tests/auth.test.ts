@@ -13,7 +13,7 @@ const schema = fs.readFileSync(path.resolve(process.cwd(), 'src/db/schema.sql'),
 
 test('schema declares every v2 table', () => {
   for (const table of [
-    'User',
+    'AppUser',
     'Session',
     'PasswordResetToken',
     'UserSettings',
@@ -35,8 +35,14 @@ test('auth stores a password hash, never a plain password column', () => {
   assert.doesNotMatch(schema, /password TEXT/);
 });
 
-test('database connection loads the applied schema tables', () => {
-  const rows = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as { name: string }[];
-  const names = rows.map((row) => row.name);
-  assert.ok(names.includes('User') && names.includes('ProjectFile'));
-});
+test(
+  'database connection loads the applied schema tables',
+  { skip: !/^postgres(ql)?:/.test(process.env.DATABASE_URL || '') && 'set DATABASE_URL to a Postgres URL to run' },
+  async () => {
+    const rows = await db
+      .prepare("SELECT table_name AS name FROM information_schema.tables WHERE table_schema='public'")
+      .all<{ name: string }>();
+    const names = rows.map((row) => row.name);
+    assert.ok(names.includes('appuser') && names.includes('projectfile'));
+  },
+);

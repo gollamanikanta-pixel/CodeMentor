@@ -17,9 +17,9 @@ export const env = {
   port: num(process.env.PORT, 5000),
   clientOrigin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',
 
-  // Account storage (SQLite). Optional — the workspace still runs locally
-  // without an account, but projects/execution history need auth.
-  databaseUrl: process.env.DATABASE_URL || 'file:./data/codementor.db',
+  // Account storage (Postgres / Supabase). Optional for local-only learning,
+  // but accounts, project sync and execution history need it.
+  databaseUrl: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/codementor',
   sessionSecret: process.env.SESSION_SECRET || 'development-only-change-me',
   sessionCookieName: process.env.SESSION_COOKIE_NAME || 'codementor_session',
   sessionTtlDays: num(process.env.SESSION_TTL_DAYS, 7),

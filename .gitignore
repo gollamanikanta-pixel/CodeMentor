@@ -6,9 +6,11 @@ dist/
 !.env.example
 .DS_Store
 *.log
-# Local SQLite database (accounts + synced projects)
+# Legacy local SQLite files (the server now uses Postgres / Supabase)
 *.db
 *.db-journal
 *.db-wal
 *.db-shm
-data/
+# Anchored on purpose: a bare `data/` also ignored client/src/data/ (languages.ts).
+/server/data/
+/.vercel/

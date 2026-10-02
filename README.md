@@ -361,6 +361,8 @@ Interactive runner defaults: `TERMINAL_RUNNER_URL=ws://127.0.0.1:5101/session`, 
 
 The v2 account columns are optional but recommended when you enable accounts: `DATABASE_URL`, `SESSION_SECRET`, `SESSION_COOKIE_NAME`, `SESSION_TTL_DAYS`, plus `EXECUTION_MAX_FILES`, `EXECUTION_MAX_PROJECT_BYTES` and `EXECUTION_MAX_FILE_BYTES` for multi-file project limits.
 
+> **Vercel + Supabase:** the server now stores data in Postgres (Supabase) instead of SQLite. See [`docs/DEPLOY_VERCEL_SUPABASE.md`](docs/DEPLOY_VERCEL_SUPABASE.md) for the deployment steps; the SQLite-specific notes below predate that change.
+
 ### Production deployment requirements
 
 The repository has no hosting-specific deployment manifest. Before deploying:

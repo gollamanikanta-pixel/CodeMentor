@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
-import { db, ensureSchema, now } from './database.js';
+import { db, ensureSchema, now, pool } from './database.js';
 
 /**
  * Idempotent development seed. Creates one demo learner with a starter project
@@ -12,21 +12,24 @@ import { db, ensureSchema, now } from './database.js';
 const DEMO_EMAIL = 'demo@codementor.local';
 const DEMO_PASSWORD = 'learner123';
 
-ensureSchema();
+if (process.env.NODE_ENV === 'production') {
+  throw new Error('Refusing to seed the public demo account in production.');
+}
 
-const existing = db.prepare('SELECT id FROM User WHERE email=?').get(DEMO_EMAIL) as { id: string } | undefined;
+await ensureSchema();
+
+const existing = await db.prepare('SELECT id FROM AppUser WHERE email=?').get<{ id: string }>(DEMO_EMAIL);
 
 if (existing) {
   console.log(`Demo learner already present (${DEMO_EMAIL}). Nothing to seed.`);
-  db.close();
+  await pool.end();
 } else {
   const userId = crypto.randomUUID();
   const stamp = now();
   const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 12);
 
-  db.exec('BEGIN');
-  try {
-    db.prepare('INSERT INTO User (id,fullName,email,passwordHash,createdAt,updatedAt,lastLoginAt) VALUES (?,?,?,?,?,?,?)').run(
+  await db.transaction(async (tx) => {
+    await tx.prepare('INSERT INTO AppUser (id,fullName,email,passwordHash,createdAt,updatedAt,lastLoginAt) VALUES (?,?,?,?,?,?,?)').run(
       userId,
       'Demo Learner',
       DEMO_EMAIL,
@@ -35,10 +38,10 @@ if (existing) {
       stamp,
       stamp,
     );
-    db.prepare('INSERT INTO UserSettings (id,userId,updatedAt) VALUES (?,?,?)').run(crypto.randomUUID(), userId, stamp);
+    await tx.prepare('INSERT INTO UserSettings (id,userId,updatedAt) VALUES (?,?,?)').run(crypto.randomUUID(), userId, stamp);
 
     const projectId = crypto.randomUUID();
-    db.prepare('INSERT INTO Project (id,userId,title,primaryLanguage,entryFile,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?)').run(
+    await tx.prepare('INSERT INTO Project (id,userId,title,primaryLanguage,entryFile,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?)').run(
       projectId,
       userId,
       'Class average explorer',
@@ -63,7 +66,7 @@ if (existing) {
       'helpers.py': 'def average(scores):\n    total = sum(scores)\n    return total / len(scores)\n',
     };
     for (const [relativePath, filename, extension, language, isEntry] of files) {
-      db.prepare(
+      await tx.prepare(
         'INSERT INTO ProjectFile (id,projectId,relativePath,filename,extension,language,content,isEntryFile,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?)',
       ).run(crypto.randomUUID(), projectId, relativePath, filename, extension, language, contents[relativePath], isEntry, stamp, stamp);
     }
@@ -72,7 +75,7 @@ if (existing) {
       { difficulty: 'Beginner', score: 4, total: 5, percentage: '80%', concepts: '["Functions","Lists"]' },
       { difficulty: 'Intermediate', score: 7, total: 10, percentage: '70%', concepts: '["Loops","Conditions"]' },
     ]) {
-      db.prepare(
+      await tx.prepare(
         'INSERT INTO QuizHistory (id,userId,projectId,language,difficulty,score,totalQuestions,percentage,conceptsToReview,quizData,createdAt) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
       ).run(
         crypto.randomUUID(),
@@ -89,15 +92,11 @@ if (existing) {
       );
     }
 
-    db.exec('COMMIT');
-  } catch (error) {
-    db.exec('ROLLBACK');
-    throw error;
-  }
+  });
 
   console.log('CodeMentor development seed complete.');
   console.log(`  demo email:    ${DEMO_EMAIL}`);
   console.log(`  demo password: ${DEMO_PASSWORD}`);
   console.log('  These credentials are for local development only.');
-  db.close();
+  await pool.end();
 }

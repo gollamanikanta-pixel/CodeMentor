@@ -3,7 +3,11 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "workspaces": ["client", "server", "runner"],
+  "workspaces": [
+    "client",
+    "server",
+    "runner"
+  ],
   "scripts": {
     "install:all": "npm install",
     "dev": "concurrently -k -n client,server,runner \"npm run dev:client\" \"npm run dev:server\" \"npm run dev:runner\"",
@@ -16,10 +20,12 @@
     "db:migrate": "npm run db:migrate --prefix server",
     "db:seed": "npm run db:seed --prefix server",
     "check": "npm run check --prefix client && npm run check --prefix server",
-    "test": "npm run test --prefix server && npm run test --prefix client && npm run test --prefix runner"
+    "test": "npm run test --prefix server && npm run test --prefix client && npm run test --prefix runner",
+    "vercel-build": "node scripts/vercel-build.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",
+    "esbuild": "^0.25.0",
     "tsx": "^4.19.2"
   },
   "overrides": {

@@ -42,17 +42,17 @@ function toSettings(row: SettingsRow) {
 }
 
 /** Ensures the learner always has a settings row to read and update. */
-function ensureRow(userId: string) {
-  const existing = db.prepare('SELECT * FROM UserSettings WHERE userId=?').get(userId) as SettingsRow | undefined;
+async function ensureRow(userId: string): Promise<SettingsRow> {
+  const existing = await db.prepare('SELECT * FROM UserSettings WHERE userId=?').get<SettingsRow>(userId);
   if (existing) return existing;
   const id = crypto.randomUUID();
-  db.prepare('INSERT INTO UserSettings (id,userId,updatedAt) VALUES (?,?,?)').run(id, userId, now());
-  return db.prepare('SELECT * FROM UserSettings WHERE userId=?').get(userId) as SettingsRow;
+  await db.prepare('INSERT INTO UserSettings (id,userId,updatedAt) VALUES (?,?,?)').run(id, userId, now());
+  return (await db.prepare('SELECT * FROM UserSettings WHERE userId=?').get<SettingsRow>(userId))!;
 }
 
-settingsRoutes.get('/', (req: AuthRequest, res) => res.json({ settings: toSettings(ensureRow(req.userId!)) }));
+settingsRoutes.get('/', async (req: AuthRequest, res) => res.json({ settings: toSettings(await ensureRow(req.userId!)) }));
 
-settingsRoutes.put('/', (req: AuthRequest, res) => {
+settingsRoutes.put('/', async (req: AuthRequest, res) => {
   const parsed = z
     .object({
       theme: z.enum(['dark', 'light', 'system']).optional(),
@@ -71,10 +71,10 @@ settingsRoutes.put('/', (req: AuthRequest, res) => {
     .safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ message: 'Invalid settings update.' });
 
-  ensureRow(req.userId!);
+  await ensureRow(req.userId!);
   const bit = (value: boolean | undefined) => (value === undefined ? null : value ? 1 : 0);
 
-  db.prepare(
+  await db.prepare(
     `UPDATE UserSettings SET
       theme=COALESCE(?,theme),
       fontSize=COALESCE(?,fontSize),
@@ -107,5 +107,5 @@ settingsRoutes.put('/', (req: AuthRequest, res) => {
     req.userId!,
   );
 
-  return res.json({ settings: toSettings(ensureRow(req.userId!)) });
+  return res.json({ settings: toSettings(await ensureRow(req.userId!)) });
 });

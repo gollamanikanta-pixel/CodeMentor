@@ -80,14 +80,13 @@ export async function postExecution(req: AuthRequest, res: Response) {
   let files: { relativePath: string; content: string }[] = [];
 
   if (parsed.data.projectId) {
-    const project = db.prepare('SELECT * FROM Project WHERE id=? AND userId=?').get(parsed.data.projectId, req.userId!) as
-      | { id: string; entryFile?: string | null }
-      | undefined;
+    const project = await db
+      .prepare('SELECT * FROM Project WHERE id=? AND userId=?')
+      .get<{ id: string; entryFile?: string | null }>(parsed.data.projectId, req.userId!);
     if (!project) return res.status(404).json({ status: 'internal_error', message: 'Project not found.' });
-    const rows = db.prepare('SELECT relativePath,content FROM ProjectFile WHERE projectId=? ORDER BY relativePath').all(project.id) as {
-      relativePath: string;
-      content: string;
-    }[];
+    const rows = await db
+      .prepare('SELECT relativePath,content FROM ProjectFile WHERE projectId=? ORDER BY relativePath')
+      .all<{ relativePath: string; content: string }>(project.id);
     files = rows.map((row) => ({ relativePath: String(row.relativePath), content: String(row.content) }));
     const selected = files.find((file) => file.relativePath === (parsed.data.entryFile || project.entryFile));
     source = selected?.content || source;
@@ -99,9 +98,9 @@ export async function postExecution(req: AuthRequest, res: Response) {
     .update(JSON.stringify({ source, files, stdin: parsed.data.stdin, language: parsed.data.language }))
     .digest('hex');
 
-  db.prepare(
+  await db.prepare(
     'INSERT INTO ExecutionJob (id,userId,projectId,language,status,sourceSnapshotHash,input,createdAt) VALUES (?,?,?,?,?,?,?,?)',
-  ).run(id, req.userId!, parsed.data.projectId || '', parsed.data.language, 'Queued', snapshotHash, parsed.data.stdin, now());
+  ).run(id, req.userId!, parsed.data.projectId || null, parsed.data.language, 'Queued', snapshotHash, parsed.data.stdin, now());
 
   const provider = selectExecutionProvider(parsed.data.language);
   const input: SecureRunInput = {
@@ -115,7 +114,7 @@ export async function postExecution(req: AuthRequest, res: Response) {
   };
   const result = await provider.run(input);
 
-  db.prepare(
+  await db.prepare(
     'UPDATE ExecutionJob SET status=?,stdout=?,stderr=?,compileOutput=?,executionTime=?,memoryUsage=?,exitCode=?,completedAt=?,failureReason=? WHERE id=? AND userId=?',
   ).run(
     result.status,
@@ -138,10 +137,10 @@ export async function postExecution(req: AuthRequest, res: Response) {
  * Cancellation is provider-dependent. No provider is configured with a cancel
  * API here, so this reports the truth rather than pretending it stopped a job.
  */
-export function cancelExecution(req: AuthRequest, res: Response) {
-  const row = db.prepare('SELECT id,status FROM ExecutionJob WHERE id=? AND userId=?').get(String(req.params.jobId), req.userId!) as
-    | { id: string; status: string }
-    | undefined;
+export async function cancelExecution(req: AuthRequest, res: Response) {
+  const row = await db
+    .prepare('SELECT id,status FROM ExecutionJob WHERE id=? AND userId=?')
+    .get<{ id: string; status: string }>(String(req.params.jobId), req.userId!);
   if (!row) return res.status(404).json({ message: 'Execution job not found.' });
   const finished = ['success', 'compilation_error', 'runtime_error', 'time_limit_exceeded', 'memory_limit_exceeded', 'internal_error', 'unavailable'];
   if (finished.includes(row.status)) {
@@ -154,10 +153,8 @@ export function cancelExecution(req: AuthRequest, res: Response) {
 }
 
 /** Read-only lookup of one of the signed-in learner's execution jobs. */
-export function getExecution(req: AuthRequest, res: Response) {
-  const row = db.prepare('SELECT * FROM ExecutionJob WHERE id=? AND userId=?').get(String(req.params.jobId), req.userId!) as
-    | Record<string, unknown>
-    | undefined;
+export async function getExecution(req: AuthRequest, res: Response) {
+  const row = await db.prepare('SELECT * FROM ExecutionJob WHERE id=? AND userId=?').get(String(req.params.jobId), req.userId!);
   if (!row) return res.status(404).json({ message: 'Execution job not found.' });
   return res.json({ job: row });
 }

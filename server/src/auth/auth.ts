@@ -27,11 +27,11 @@ const safeUser = (row: Record<string, unknown>): SafeUser => ({
 const secure = () => env.nodeEnv === 'production';
 
 /** Resolves a session cookie for authenticated non-HTTP transports (WebSocket). */
-export function authenticateSessionCookie(raw: string | undefined): string | null {
+export async function authenticateSessionCookie(raw: string | undefined): Promise<string | null> {
   if (!raw) return null;
-  const row = db
+  const row = await db
     .prepare('SELECT userId FROM Session WHERE tokenHash=? AND expiresAt>?')
-    .get(hash(raw), now()) as { userId: string } | undefined;
+    .get<{ userId: string }>(hash(raw), now());
   return row?.userId ?? null;
 }
 
@@ -59,10 +59,10 @@ export function requireCsrf(req: Request, res: Response, next: NextFunction) {
   return next();
 }
 
-export function createSession(res: Response, userId: string, req: Request, remember = true) {
+export async function createSession(res: Response, userId: string, req: Request, remember = true) {
   const raw = crypto.randomBytes(32).toString('hex');
   const expires = new Date(Date.now() + (remember ? env.sessionTtlDays : 1) * 86_400_000).toISOString();
-  db.prepare(
+  await db.prepare(
     'INSERT INTO Session (id,userId,tokenHash,expiresAt,createdAt,userAgent,ipMetadata) VALUES (?,?,?,?,?,?,?)',
   ).run(
     crypto.randomUUID(),
@@ -83,23 +83,27 @@ export function createSession(res: Response, userId: string, req: Request, remem
   setCsrf(res);
 }
 
-export function destroySession(req: Request, res: Response) {
+export async function destroySession(req: Request, res: Response) {
   const raw = req.cookies?.[env.sessionCookieName];
-  if (raw) db.prepare('DELETE FROM Session WHERE tokenHash=?').run(hash(raw));
+  if (raw) await db.prepare('DELETE FROM Session WHERE tokenHash=?').run(hash(raw));
   res.clearCookie(env.sessionCookieName, { httpOnly: true, sameSite: 'lax', secure: secure(), path: '/' });
   res.clearCookie('codementor_csrf', { sameSite: 'lax', secure: secure(), path: '/' });
 }
 
 /** Attaches the current user when a valid session cookie is present. */
-export function optionalAuth(req: AuthRequest, _res: Response, next: NextFunction) {
+export async function optionalAuth(req: AuthRequest, _res: Response, next: NextFunction) {
   const raw = req.cookies?.[env.sessionCookieName];
   if (raw) {
-    const row = db
-      .prepare('SELECT User.* FROM Session JOIN User ON User.id=Session.userId WHERE Session.tokenHash=? AND Session.expiresAt>?')
-      .get(hash(raw), now()) as Record<string, unknown> | undefined;
+    try {
+    const row = await db
+      .prepare('SELECT AppUser.* FROM Session JOIN AppUser ON AppUser.id=Session.userId WHERE Session.tokenHash=? AND Session.expiresAt>?')
+      .get(hash(raw), now());
     if (row) {
       req.user = safeUser(row);
       req.userId = String(row.id);
+    }
+    } catch (error) {
+      return next(error);
     }
   }
   next();
@@ -116,16 +120,15 @@ export async function register(
   res: Response,
 ) {
   const email = input.email.trim().toLowerCase();
-  const exists = db.prepare('SELECT id FROM User WHERE email=?').get(email);
+  const exists = await db.prepare('SELECT id FROM AppUser WHERE email=?').get(email);
   if (exists) return res.status(409).json({ message: 'An account with that email already exists.' });
 
   const id = crypto.randomUUID();
   const timestamp = now();
   const passwordHash = await bcrypt.hash(input.password, 12);
 
-  db.exec('BEGIN');
-  try {
-    db.prepare('INSERT INTO User (id,fullName,email,passwordHash,createdAt,updatedAt) VALUES (?,?,?,?,?,?)').run(
+  await db.transaction(async (tx) => {
+    await tx.prepare('INSERT INTO AppUser (id,fullName,email,passwordHash,createdAt,updatedAt) VALUES (?,?,?,?,?,?)').run(
       id,
       input.fullName.trim(),
       email,
@@ -133,14 +136,11 @@ export async function register(
       timestamp,
       timestamp,
     );
-    db.prepare('INSERT INTO UserSettings (id,userId,updatedAt) VALUES (?,?,?)').run(crypto.randomUUID(), id, timestamp);
-    db.exec('COMMIT');
-  } catch (error) {
-    db.exec('ROLLBACK');
-    throw error;
-  }
-  createSession(res, id, req);
-  return res.status(201).json({ user: safeUser(db.prepare('SELECT * FROM User WHERE id=?').get(id) as Record<string, unknown>) });
+    await tx.prepare('INSERT INTO UserSettings (id,userId,updatedAt) VALUES (?,?,?)').run(crypto.randomUUID(), id, timestamp);
+  });
+  await createSession(res, id, req);
+  const created = await db.prepare('SELECT * FROM AppUser WHERE id=?').get(id);
+  return res.status(201).json({ user: safeUser(created as Record<string, unknown>) });
 }
 
 export async function login(
@@ -148,20 +148,20 @@ export async function login(
   req: Request,
   res: Response,
 ) {
-  const row = db.prepare('SELECT * FROM User WHERE email=?').get(input.email.trim().toLowerCase()) as
-    | { id: string; passwordHash: string; [key: string]: unknown }
-    | undefined;
+  const row = await db
+    .prepare('SELECT * FROM AppUser WHERE email=?')
+    .get<{ id: string; passwordHash: string; [key: string]: unknown }>(input.email.trim().toLowerCase());
   const valid = row ? await bcrypt.compare(input.password, row.passwordHash) : false;
   if (!valid) return res.status(401).json({ message: 'Invalid email or password.' });
 
   const stamp = now();
-  db.prepare('UPDATE User SET lastLoginAt=?,updatedAt=? WHERE id=?').run(stamp, stamp, row!.id);
-  createSession(res, row!.id, req, input.remember !== false);
+  await db.prepare('UPDATE AppUser SET lastLoginAt=?,updatedAt=? WHERE id=?').run(stamp, stamp, row!.id);
+  await createSession(res, row!.id, req, input.remember !== false);
   return res.json({ user: safeUser({ ...row!, lastLoginAt: stamp }) });
 }
 
-export function logout(req: Request, res: Response) {
-  destroySession(req, res);
+export async function logout(req: Request, res: Response) {
+  await destroySession(req, res);
   return res.status(204).end();
 }
 
@@ -180,13 +180,11 @@ export function me(req: AuthRequest, res: Response) {
  * Always responds with the same message so account existence is never leaked.
  * In development the reset link is logged instead of emailed.
  */
-export function forgot(email: string, _req: Request, res: Response) {
-  const row = db.prepare('SELECT id FROM User WHERE email=?').get(email.trim().toLowerCase()) as
-    | { id: string }
-    | undefined;
+export async function forgot(email: string, _req: Request, res: Response) {
+  const row = await db.prepare('SELECT id FROM AppUser WHERE email=?').get<{ id: string }>(email.trim().toLowerCase());
   if (row) {
     const raw = crypto.randomBytes(32).toString('hex');
-    db.prepare('INSERT INTO PasswordResetToken (id,userId,tokenHash,expiresAt,createdAt) VALUES (?,?,?,?,?)').run(
+    await db.prepare('INSERT INTO PasswordResetToken (id,userId,tokenHash,expiresAt,createdAt) VALUES (?,?,?,?,?)').run(
       crypto.randomUUID(),
       row.id,
       hash(raw),
@@ -201,21 +199,16 @@ export function forgot(email: string, _req: Request, res: Response) {
 }
 
 export async function reset(token: string, password: string, res: Response) {
-  const row = db
+  const row = await db
     .prepare('SELECT * FROM PasswordResetToken WHERE tokenHash=? AND usedAt IS NULL AND expiresAt>?')
-    .get(hash(token), now()) as { id: string; userId: string } | undefined;
+    .get<{ id: string; userId: string }>(hash(token), now());
   if (!row) return res.status(400).json({ message: 'This reset link is invalid or expired.' });
 
   const passwordHash = await bcrypt.hash(password, 12);
-  db.exec('BEGIN');
-  try {
-    db.prepare('UPDATE User SET passwordHash=?,updatedAt=? WHERE id=?').run(passwordHash, now(), row.userId);
-    db.prepare('UPDATE PasswordResetToken SET usedAt=? WHERE id=?').run(now(), row.id);
-    db.prepare('DELETE FROM Session WHERE userId=?').run(row.userId);
-    db.exec('COMMIT');
-  } catch (error) {
-    db.exec('ROLLBACK');
-    throw error;
-  }
+  await db.transaction(async (tx) => {
+    await tx.prepare('UPDATE AppUser SET passwordHash=?,updatedAt=? WHERE id=?').run(passwordHash, now(), row.userId);
+    await tx.prepare('UPDATE PasswordResetToken SET usedAt=? WHERE id=?').run(now(), row.id);
+    await tx.prepare('DELETE FROM Session WHERE userId=?').run(row.userId);
+  });
   return res.json({ message: 'Password reset successfully. You can now log in.' });
 }

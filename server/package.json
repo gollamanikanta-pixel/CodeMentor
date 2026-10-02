@@ -13,23 +13,25 @@
     "test": "tsx --test src/utils/hash.test.ts src/tests/auth.test.ts src/tests/authFlowGuard.test.ts src/tests/providers.test.ts src/tests/pathSafety.test.ts src/tests/validatorsAndCache.test.ts src/tests/pistonNormalizer.test.ts src/tests/judge0Normalizer.test.ts src/tests/aiService.test.ts"
   },
   "dependencies": {
-    "express": "latest",
-    "cors": "latest",
-    "helmet": "latest",
-    "dotenv": "latest",
-    "zod": "latest",
-    "express-rate-limit": "latest",
-    "cookie-parser": "latest",
     "bcryptjs": "latest",
-    "ws": "^8.18.0"
+    "cookie-parser": "latest",
+    "cors": "latest",
+    "dotenv": "latest",
+    "express": "latest",
+    "express-rate-limit": "latest",
+    "helmet": "latest",
+    "pg": "^8.13.1",
+    "ws": "^8.18.0",
+    "zod": "latest"
   },
   "devDependencies": {
-    "tsx": "latest",
-    "typescript": "latest",
+    "@types/cookie-parser": "latest",
+    "@types/cors": "latest",
     "@types/express": "latest",
     "@types/node": "latest",
-    "@types/cors": "latest",
-    "@types/cookie-parser": "latest",
-    "@types/ws": "^8.5.13"
+    "@types/pg": "^8.11.10",
+    "@types/ws": "^8.5.13",
+    "tsx": "latest",
+    "typescript": "latest"
   }
 }

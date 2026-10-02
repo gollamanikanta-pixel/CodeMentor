@@ -87,7 +87,7 @@ export function attachTerminalGateway(server: Server): void {
   const websocketServer = new WebSocketServer({ noServer: true, maxPayload: MAX_SOURCE_BYTES + 4096 });
   let activeConnections = 0;
 
-  server.on('upgrade', (request, socket, head) => {
+  server.on('upgrade', async (request, socket, head) => {
     const url = new URL(request.url ?? '/', 'http://localhost');
     if (url.pathname !== '/api/terminal') {
       reject(socket, 404, 'Unknown WebSocket endpoint.');
@@ -110,7 +110,13 @@ export function attachTerminalGateway(server: Server): void {
     const csrf = protocols.find((protocol) => protocol !== SUBPROTOCOL);
     const cookies = cookieValues(request.headers.cookie);
     const sessionName = env.sessionCookieName;
-    const userId = authenticateSessionCookie(cookies.get(sessionName));
+    let userId: string | null = null;
+    try {
+      userId = await authenticateSessionCookie(cookies.get(sessionName));
+    } catch {
+      reject(socket, 503, 'The account service is unavailable. Please try again shortly.');
+      return;
+    }
     if (!userId) {
       reject(socket, 401, 'Sign in to use the interactive runner.');
       return;
