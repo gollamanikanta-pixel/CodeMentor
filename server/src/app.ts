@@ -33,7 +33,7 @@ app.use(
       ? {
           directives: {
             defaultSrc: ["'self'"],
-            scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+            scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'https://cdn.jsdelivr.net'],
             styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
             imgSrc: ["'self'", 'data:', 'blob:'],
             connectSrc: ["'self'", 'wss:', 'ws:'],
