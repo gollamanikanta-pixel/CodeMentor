@@ -1,0 +1,29 @@
+{
+  "name": "codementor-complete-project",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "workspaces": ["client", "server", "runner"],
+  "scripts": {
+    "install:all": "npm install",
+    "dev": "concurrently -k -n client,server,runner \"npm run dev:client\" \"npm run dev:server\" \"npm run dev:runner\"",
+    "dev:client": "npm run dev --prefix client",
+    "dev:server": "npm run dev --prefix server",
+    "dev:runner": "npm run dev --prefix runner",
+    "runner:template": "npm run build:template --prefix runner",
+    "build": "npm run build --prefix client",
+    "db:generate": "npm run db:generate --prefix server",
+    "db:migrate": "npm run db:migrate --prefix server",
+    "db:seed": "npm run db:seed --prefix server",
+    "check": "npm run check --prefix client && npm run check --prefix server",
+    "test": "npm run test --prefix server && npm run test --prefix client && npm run test --prefix runner"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "tsx": "^4.19.2"
+  },
+  "overrides": {
+    "lodash-es": "^4.18.1",
+    "dompurify": "^3.4.16"
+  }
+}
