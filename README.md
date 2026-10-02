@@ -377,7 +377,7 @@ The root `railway.toml` deploys the React SPA and Express API together as one pu
    - `DATABASE_URL=${{Postgres.DATABASE_URL}}` (use the actual Railway PostgreSQL service name in the reference)
    - `CLIENT_ORIGIN=https://<your-codementor-domain>`
    - `SESSION_SECRET=<a unique random secret of at least 32 bytes>`
-   - `TERMINAL_RUNNER_URL=ws://${{Runner.RAILWAY_PRIVATE_DOMAIN}}:${{Runner.PORT}}/session` (use the actual runner service name)
+   - `TERMINAL_RUNNER_URL=ws://${{Runner.RAILWAY_PRIVATE_DOMAIN}}:8080/session` (use the actual runner service name and the runner's listening port; this project currently listens on Railway port `8080`)
    - `TERMINAL_RUNNER_SECRET=<the same random secret set on the runner>`
 5. Set the runner service variables:
    - `RUNNER_SHARED_SECRET=<the exact same value as TERMINAL_RUNNER_SECRET>`
