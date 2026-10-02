@@ -1,0 +1,16 @@
+{
+  "name": "codementor-interactive-runner",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node src/index.mjs",
+    "build:template": "node src/build-template.mjs",
+    "test": "node --test src/*.test.mjs"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "e2b": "^2.16.0",
+    "ws": "^8.18.0"
+  }
+}

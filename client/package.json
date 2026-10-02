@@ -1,0 +1,29 @@
+{
+  "name": "codementor-client",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "tsc -b && vite build",
+    "check": "tsc --noEmit",
+    "preview": "vite preview --host 0.0.0.0",
+    "test": "tsx --test tests/localAnalyzer.test.ts tests/localQuiz.test.ts tests/htmlAnalyzer.test.ts tests/sandboxPreview.test.ts tests/visualDetails.test.ts tests/programFlow.test.ts tests/executionTranscript.test.ts tests/interactiveRunner.test.ts"
+  },
+  "dependencies": {
+    "@monaco-editor/react": "^4.7.0",
+    "@vitejs/plugin-react": "latest",
+    "jszip": "^3.10.2",
+    "lucide-react": "latest",
+    "mermaid": "^12.0.0",
+    "react": "latest",
+    "react-dom": "latest",
+    "react-router-dom": "^7.18.4",
+    "typescript": "latest",
+    "vite": "latest"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0"
+  }
+}

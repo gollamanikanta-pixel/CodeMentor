@@ -1,0 +1,35 @@
+{
+  "name": "codementor-server",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "check": "tsc --noEmit",
+    "db:generate": "tsx src/db/generate.ts",
+    "db:migrate": "tsx src/db/migrate.ts",
+    "db:seed": "tsx src/db/seed.ts",
+    "test": "tsx --test src/utils/hash.test.ts src/tests/auth.test.ts src/tests/authFlowGuard.test.ts src/tests/providers.test.ts src/tests/pathSafety.test.ts src/tests/validatorsAndCache.test.ts src/tests/pistonNormalizer.test.ts src/tests/judge0Normalizer.test.ts src/tests/aiService.test.ts"
+  },
+  "dependencies": {
+    "express": "latest",
+    "cors": "latest",
+    "helmet": "latest",
+    "dotenv": "latest",
+    "zod": "latest",
+    "express-rate-limit": "latest",
+    "cookie-parser": "latest",
+    "bcryptjs": "latest",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "tsx": "latest",
+    "typescript": "latest",
+    "@types/express": "latest",
+    "@types/node": "latest",
+    "@types/cors": "latest",
+    "@types/cookie-parser": "latest",
+    "@types/ws": "^8.5.13"
+  }
+}
