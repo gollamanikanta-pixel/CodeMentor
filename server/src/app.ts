@@ -78,7 +78,7 @@ if (serveStatic) {
   const distPath = path.resolve(__dirname, '../../client/dist');
   app.use(express.static(distPath));
   // SPA fallback — any non-API path gets index.html so React Router works.
-  app.get('*', (_req, res) => {
+  app.use((_req, res) => {
     res.sendFile(path.join(distPath, 'index.html'));
   });
 }
