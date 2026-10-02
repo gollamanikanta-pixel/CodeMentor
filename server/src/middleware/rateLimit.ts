@@ -4,6 +4,7 @@ import rateLimit from 'express-rate-limit';
 export const generalLimiter = rateLimit({
   windowMs: 60_000,
   limit: 60,
+  skip: (req) => req.path === '/api/deep-analyze',
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: 'Too many requests. Please continue learning locally and try again shortly.' },

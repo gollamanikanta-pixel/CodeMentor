@@ -35,7 +35,7 @@ const CONTENT = {
     sections: [
       {
         heading: 'Fair learning use',
-        body: 'Use CodeMentor AI to learn. AI Deep Help and secure remote execution are rate-limited fair-use features and are not unlimited compute.',
+        body: 'Use CodeMentor AI to learn. AI Deep Help has no CodeMentor-imposed daily cap or cooldown, but Gemini availability, quotas, and billing apply. Secure remote execution may have service limits.',
       },
       {
         heading: 'Code you submit',

@@ -119,10 +119,10 @@ row says otherwise.
 
 ## 13. AI Deep Help
 
-- [ ] “Ask AI for Deeper Help” opens a dialog showing remaining usage or the honest unconfigured state.
+- [ ] “Ask AI for Deeper Help” opens a dialog showing provider readiness or the honest unconfigured state.
 - [ ] With no AI keys: the dialog explains everything local remains available; confirming returns the safe message.
-- [ ] With keys configured: first request consumes quota; repeating the identical request returns `cached: true` and does **not** consume quota.
-- [ ] Exceeding the daily limit and hitting the cooldown both return friendly messages.
+- [ ] With keys configured: requests are available on demand without an app-imposed daily cap or cooldown; Gemini's own quotas and billing still apply.
+- [ ] Repeating the identical request returns `cached: true` and reuses the saved explanation.
 - [ ] AI is never called on load, typing, tab switch, theme change, save, local analysis, visual/quiz generation, or upload (verify in the Network panel).
 
 ## 14. Security and privacy

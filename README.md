@@ -18,7 +18,7 @@ CodeMentor **guides, it never auto-fixes**. It explains errors, highlights likel
 - **Local quiz generation** — concept, true/false, find-issue and debugging-strategy questions with 5/10/15 counts and three difficulty levels. Signed-in quiz results and history are stored in the account API; browser-only history is used only without an account.
 - **Projects** — save, search, filter, rename, duplicate, export and delete; signed-in Playground source and project operations use the protected account API. Existing browser-only projects are not presented as account data.
 - **Settings** — appearance, editor and learning preferences persist locally and sync to the signed-in account. Playground drafts remain browser-local; saving a project uploads source only on explicit action.
-- **AI Deep Help (optional)** — one combined backend request per unique code version, stable-hash caching, daily quota and cooldown, honest unavailable state.
+- **AI Deep Help (optional)** — on-demand backend requests, stable-hash caching, no application-level request cap or cooldown, and an honest unavailable state.
 - **Accounts** — register, log in, log out and recover a password before entering the authenticated workspace. Sessions are opaque httpOnly cookies; every state-changing request is CSRF-checked.
 - **Account-backed projects and quiz history** — source files, projects, settings, quiz history and execution history use owner-scoped protected APIs. If an account request fails, account data is not silently replaced by browser-local data.
 - **Multi-file workspace (v2)** — a file explorer, themed Monaco editor, entry-file selection, ZIP import/export and a sandboxed browser preview for web projects.
@@ -103,7 +103,7 @@ codementor/
 │     ├─ middleware/               # errorHandler, rateLimit
 │     ├─ providers/                # secureExecutionProvider + provider selection
 │     ├─ routes/                   # apiRouter, authRoutes, projectRoutes, aiRoutes, executionRoutes
-│     ├─ services/aiService.ts     # hash cache, quota, cooldown, output limits
+│     ├─ services/aiService.ts     # hash cache, provider requests, output limits
 │     ├─ tests/auth.test.ts        # v2: schema/auth safety tests
 │     ├─ types/index.ts
 │     ├─ utils/hash.ts             # stableStringify / stableHash / truncate
@@ -314,7 +314,7 @@ Quizzes are generated locally from the learner's own code, concepts, errors and 
 
 ## 10. AI Deep Help and cost control
 
-AI is **optional, backend-only, and never automatic**. The backend reads `AI_API_BASE_URL`, `AI_API_KEY`, `AI_MODEL`, `AI_API_TIMEOUT_MS`, `AI_DAILY_LIMIT`, `AI_COOLDOWN_SECONDS`, `AI_CACHE_TTL_SECONDS`, `AI_MAX_SOURCE_CHARS` and `AI_MAX_CONTEXT_LINES`. There is no client-side provider key. The service supports OpenAI-compatible chat-completions endpoints and Google's native Gemini API adapter.
+AI is **optional, backend-only, and never automatic**. The backend reads `AI_API_BASE_URL`, `AI_API_KEY`, `AI_MODEL`, `AI_API_TIMEOUT_MS`, `AI_CACHE_TTL_SECONDS`, `AI_MAX_SOURCE_CHARS` and `AI_MAX_CONTEXT_LINES`. There is no client-side provider key or app-imposed daily request cap/cooldown. Gemini account quotas and billing still apply. The service supports OpenAI-compatible chat-completions endpoints and Google's native Gemini API adapter.
 
 To enable Deep Help, configure all three provider values on the **server only** (for Railway, on the CodeMentor service; never in Vite or browser settings):
 
@@ -326,14 +326,13 @@ AI_MODEL=<model name available to your provider account>
 
 For OpenAI-compatible providers, `AI_API_BASE_URL` should be the provider's complete chat-completions endpoint. For Gemini, use the API origin shown above and the provider's currently available model name. Settings exposes only whether the backend reports a complete configuration; it never displays or stores the key. A signed-in learner must also have **Enable AI Deep Help** on in account settings; the backend enforces that preference as well as authentication and CSRF. The provider credential, billing/access and model selection must be supplied by the deployment owner.
 
-- The browser only ever calls `POST /api/deep-analyze` and `GET /api/ai-usage`. Deep Help is account-gated (signed-in session + CSRF token) and checks the learner's saved account setting; the usage endpoint returns only safe status and quota metadata.
-- The learner clicks **Ask AI for Deeper Help** and confirms a dialog that shows **“AI Deep Help remaining today: X”**.
+- The browser only ever calls `POST /api/deep-analyze` and `GET /api/ai-usage`. Deep Help is account-gated (signed-in session + CSRF token) and checks the learner's saved account setting; the usage endpoint returns only safe provider readiness.
+- The learner clicks **Ask AI for Deeper Help** and confirms. There is no app-imposed daily request cap or cooldown; Gemini account quotas and billing apply.
 - The backend builds a stable hash from the source excerpt, language, execution result, local error fingerprints, explanation level, hint level, requested sections and model.
-- Cache hit → returns `cached: true`, no provider call, **no quota consumed**. The UI says a saved explanation is available and that using it will not consume another request.
-- Only failures, timeouts and malformed responses are exempt from quota too — they never count against the learner.
+- Cache hit → returns `cached: true` without a provider call.
 - Output is capped: summary ≤ 4 sentences, ≤ 5 concepts, ≤ 5 issue/hint items, ≤ 5 tips, ≤ 5 extra quiz questions. Large source is sent as a focused excerpt plus nearby lines and the local summary.
 - At most **one** structured JSON repair retry, never a retry loop.
-- If AI is missing, rate-limited or fails, the local analysis stays fully available.
+- If AI is missing, the provider rejects or rate-limits the request, or a call fails, the local analysis stays fully available.
 
 AI is never called while typing, on page load, on tab switching, on theme/setting changes, on save, on local analysis, on visual/quiz generation, or on upload. Near the AI controls the UI shows **“Use Local Guidance First.”**
 
@@ -414,7 +413,7 @@ npm run build       # production client build
 npm run db:generate # validate the schema
 ```
 
-See [`docs/TESTING.md`](docs/TESTING.md) and [`docs/MANUAL_TEST_CHECKLIST.md`](docs/MANUAL_TEST_CHECKLIST.md) for the full manual matrix (landing, responsive layouts, each runner, error markers, hint levels, diagrams, quizzes, uploads, AI cache/quota/cooldown, missing configuration, no-auto-correction and no-secret-exposure checks).
+See [`docs/TESTING.md`](docs/TESTING.md) and [`docs/MANUAL_TEST_CHECKLIST.md`](docs/MANUAL_TEST_CHECKLIST.md) for the full manual matrix (landing, responsive layouts, each runner, error markers, hint levels, diagrams, quizzes, uploads, AI cache and availability, missing configuration, no-auto-correction and no-secret-exposure checks).
 
 ## 14. Troubleshooting
 
@@ -447,7 +446,7 @@ See [`docs/TESTING.md`](docs/TESTING.md) and [`docs/MANUAL_TEST_CHECKLIST.md`](d
 - Full live E2B validation after configuring the owner's API key and building the hosted template.
 - Vitest + Playwright suites for component and browser-level coverage.
 - Instructor views and shareable, read-only project links.
-- Shared session/cache storage for multi-instance deployments (session, AI quota/cache and runner cooldown state are currently per-process).
+- Shared session/cache storage for multi-instance deployments (session, AI response cache and runner cooldown state are currently per-process).
 
 ## 16. Validation notes (honest status)
 

@@ -17,10 +17,8 @@ apiRouter.use('/projects', projectRoutes);
 apiRouter.use('/quizzes', quizRoutes);
 apiRouter.use('/settings', settingsRoutes);
 
-// Only the expensive, provider-backed POST routes get the extra limiter.
-// The read-only usage endpoints stay under the global limiter so the header
-// and dialogs can safely display fair-use status.
-apiRouter.use('/deep-analyze', providerLimiter);
+// Secure code execution keeps its provider backstop. AI Deep Help is on-demand
+// without an application-level request cap or cooldown.
 apiRouter.use('/run', providerLimiter);
 
 apiRouter.use(aiRoutes);

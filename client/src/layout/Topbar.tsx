@@ -48,7 +48,7 @@ export function Topbar() {
           <span className="status-dot" aria-hidden="true" /> Local-first learning
         </Pill>
         <Pill tone="violet" className="ai-pill">
-          AI: {usage.configured ? `${usage.remaining} left` : 'local only'}
+          AI: {usage.configured ? 'ready' : 'local only'}
         </Pill>
         <IconButton label={resolved === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'} onClick={toggle}>
           {resolved === 'dark' ? <Sun size={18} /> : <Moon size={18} />}

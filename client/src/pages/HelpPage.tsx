@@ -73,12 +73,12 @@ const SECTIONS: Array<{ icon: typeof BookOpen; title: string; body: ReactNode }>
   },
   {
     icon: Bot,
-    title: 'AI Deep Help fair use',
+    title: 'AI Deep Help',
     body: (
       <p>
         AI is optional, backend-only and never called automatically. It only runs when you click <strong>Ask AI for Deeper Help</strong>
-        and confirm. Cached results for the same code version are reused for free; the daily limit and cooldown are enforced by the
-        server, and local guidance always remains available.
+        and confirm. Cached results for the same code version are reused. CodeMentor does not impose a daily request cap or cooldown;
+        Gemini account quotas and billing still apply, and local guidance always remains available.
       </p>
     ),
   },

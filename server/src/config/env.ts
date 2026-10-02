@@ -29,8 +29,6 @@ export const env = {
   aiKey: process.env.AI_API_KEY || '',
   aiModel: process.env.AI_MODEL || '',
   aiTimeoutMs: num(process.env.AI_API_TIMEOUT_MS, 30000),
-  aiDailyLimit: num(process.env.AI_DAILY_LIMIT, 3),
-  aiCooldownSeconds: num(process.env.AI_COOLDOWN_SECONDS, 30),
   aiCacheTtlSeconds: num(process.env.AI_CACHE_TTL_SECONDS, 86400),
   aiMaxSourceChars: num(process.env.AI_MAX_SOURCE_CHARS, 12000),
   aiMaxContextLines: num(process.env.AI_MAX_CONTEXT_LINES, 80),

@@ -4,19 +4,9 @@ import { stableHash, truncate } from '../utils/hash.js';
 import type { AiUsageSnapshot, DeepAnalyzeInput } from '../types/index.js';
 
 const cache = new TtlCache<Record<string, unknown>>();
-const usage = { day: new Date().toISOString().slice(0, 10), count: 0, lastRequestAt: 0 };
 
 const SYSTEM_PROMPT =
   'You are CodeMentor Deep Help, a patient programming teacher. Local analysis is already available. Give deeper educational guidance only. Never give corrected code, exact corrected lines, patches, diffs, replacements, copy-paste solutions, or exact missing text for a learner’s specific line. Explain what happened, why, concepts, area to inspect, progressive hints, self-check questions, debugging steps, and concise tips. If uncertain, say possible issue or likely logic issue. Do not invent output or behavior. Return exactly one JSON object with these keys: summary (non-empty string), deeperExplanation (non-empty string), concepts (array of strings), errors (array of objects), debuggingSteps (array of strings), tips (array of strings), additionalQuizQuestions (array of objects), warnings (array of strings). Use empty arrays when there are no items. Do not wrap the JSON in markdown.';
-
-function resetDaily() {
-  const today = new Date().toISOString().slice(0, 10);
-  if (usage.day !== today) {
-    usage.day = today;
-    usage.count = 0;
-    usage.lastRequestAt = 0;
-  }
-}
 
 /** Collapse a focused excerpt plus the local signals into a stable cache key. */
 function buildCacheKey(input: DeepAnalyzeInput): string {
@@ -172,27 +162,14 @@ async function callProvider(userContent: string, repair = false): Promise<Record
   }
 }
 
-/**
- * One combined AI request per unique code/context combination. Cached results
- * never consume quota, and malformed/failed provider responses are never
- * charged either.
- */
+/** Cached results avoid redundant provider calls; all other requests go to Gemini. */
 export async function deepAnalyze(input: DeepAnalyzeInput) {
-  resetDaily();
   const key = buildCacheKey(input);
   const cached = cache.get(key);
-  if (cached) {
-    return { ...cached, cached: true, remaining: Math.max(0, env.aiDailyLimit - usage.count) };
-  }
+  if (cached) return { ...cached, cached: true };
 
   if (!aiConfigured()) {
     throw new Error('AI Deep Help is not configured. Local guidance remains available.');
-  }
-  if (Date.now() - usage.lastRequestAt < env.aiCooldownSeconds * 1000) {
-    throw new Error('AI Deep Help is cooling down. Please continue with local guidance for a moment.');
-  }
-  if (usage.count >= env.aiDailyLimit) {
-    throw new Error('AI Deep Help daily limit reached. Local guidance remains available.');
   }
 
   const userContent = buildUserContext(input);
@@ -209,17 +186,11 @@ export async function deepAnalyze(input: DeepAnalyzeInput) {
   }
 
   cache.set(key, safe, env.aiCacheTtlSeconds * 1000);
-  usage.count += 1;
-  usage.lastRequestAt = Date.now();
-  return { ...safe, cached: false, remaining: Math.max(0, env.aiDailyLimit - usage.count) };
+  return { ...safe, cached: false };
 }
 
 export function aiUsage(): AiUsageSnapshot {
-  resetDaily();
   return {
-    remaining: Math.max(0, env.aiDailyLimit - usage.count),
-    limit: env.aiDailyLimit,
     configured: aiConfigured(),
-    cooldownSeconds: env.aiCooldownSeconds,
   };
 }

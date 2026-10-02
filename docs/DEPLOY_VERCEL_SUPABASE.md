@@ -54,7 +54,7 @@ install/build commands). Add these environment variables (Production + Preview):
   (editor, local analysis, visuals, quizzes, accounts, projects, multi-file runs via Judge0).
   To enable it, run `server/src/index.ts` and `runner/` on a host with long-lived processes
   (Railway, Fly.io, a VPS) and point the browser's `/api` at that origin.
-* **In-memory limits**: AI/execution daily quotas, cooldowns and the AI cache live in each
+* **In-memory limits**: secure-execution quotas/cooldowns and the AI response cache live in each
   function instance's memory, so they are best-effort on serverless (they reset on cold start and
-  are per instance). Move them into Postgres before relying on them for cost control.
+  are per instance). AI Deep Help has no application-level cap or cooldown; provider quotas still apply.
 * `npm run db:seed` creates a public demo account and refuses to run when `NODE_ENV=production`.

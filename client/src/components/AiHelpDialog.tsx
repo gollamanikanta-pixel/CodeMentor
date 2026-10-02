@@ -8,7 +8,7 @@ import { useToast } from '../hooks/useToast';
 import { useAiUsage } from '../hooks/useAiUsage';
 import { useAuth } from '../auth/AuthContext';
 
-type Result = DeepAnalysis & { cached?: boolean; remaining?: number };
+type Result = DeepAnalysis & { cached?: boolean };
 
 export function AiHelpDialog({
   open,
@@ -89,7 +89,7 @@ export function AiHelpDialog({
               Keep learning locally
             </Button>
             <Button variant="ai" icon={Sparkles} disabled={loading || !usage.configured || !user} onClick={runDeepHelp}>
-              {loading ? 'Asking for deeper guidance…' : 'Use one AI Deep Help request'}
+              {loading ? 'Asking for deeper guidance…' : 'Ask AI for Deeper Help'}
             </Button>
           </>
         )
@@ -121,17 +121,15 @@ export function AiHelpDialog({
           </div>
         ) : (
           <div className="ai-status">
-            <span>
-              <strong>AI Deep Help remaining today: {usage.remaining}</strong> of {usage.limit}
-            </span>
-            <span className="muted">Fair use · cooldown {usage.cooldownSeconds}s · cached results never consume a request.</span>
+            <strong>AI Deep Help is ready.</strong>
+            <span className="muted">Available on demand. Gemini account quotas and billing still apply.</span>
           </div>
         )}
 
         {!result ? (
           <>
             <p>
-              Use one AI Deep Help request for deeper guidance on this version of your code? Your local analysis is already ready;
+              Ask for deeper guidance on this version of your code? Your local analysis is already ready;
               AI adds a deeper, teacher-style explanation only when you ask.
             </p>
             <ul className="ai-rules">

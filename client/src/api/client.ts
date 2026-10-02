@@ -46,10 +46,7 @@ export async function getAiUsage() {
   const response = await fetch('/api/ai-usage');
   if (!response.ok) throw new Error('usage-unavailable');
   return (await response.json()) as {
-    remaining: number;
-    limit: number;
     configured: boolean;
-    cooldownSeconds: number;
   };
 }
 

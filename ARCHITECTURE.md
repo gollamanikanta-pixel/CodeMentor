@@ -11,7 +11,7 @@ Browser (React + Vite)                         Backend (Express + TS)
 pages/        route screens                    routes/    api composition
 layout/       workspace shell                  controllers/  HTTP normalization
 editor/       Monaco adapter (themed)          validators/   Zod schemas
-analyzers/    local Python/JS/TS/SQL rules     services/     AI cache + quota
+analyzers/    local Python/JS/TS/SQL rules     services/     AI response cache
 diagrams/     SVG + Mermaid visuals            providers/    secure-runner adapters
 quizzes/      local question generation        db/           Postgres schema + client
 features/     analysis, visuals, quiz,         auth/         sessions + CSRF

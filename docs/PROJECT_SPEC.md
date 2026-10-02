@@ -51,7 +51,7 @@ carries `correctedCode`, `fixedCode`, `correctedLine`, `applyFix`, `patch` or
 | Local visuals (9 kinds) | **Implemented** | SVG + safe Mermaid from detected structure. |
 | Local quizzes + account history | **Implemented** | Generated locally; completed signed-in quiz results use the protected Postgres-backed API. |
 | Settings | **Implemented (client)** | Theme, font size, wrap, minimap, motion, levels, language, autosave, AI toggle. |
-| AI Deep Help | **Implemented** | Backend-only, account-gated, cache/quota/cooldown, honest unavailable state. |
+| AI Deep Help | **Implemented** | Backend-only, account-gated, cached, on-demand without an app-imposed request cap or cooldown. |
 | Secure remote runner (C/C++/Java) | **Provider interface + honest fallback** | Real HTTPS adapter; no local compiler, no `child_process`. Needs `EXECUTION_*` config. |
 | HTML in the Playground | **Implemented** | `HTML` is a first-class language with the `browser_html_preview` mode. |
 | `browser_html_preview` execution mode | **Implemented** | Sandboxed iframe preview with Run Preview / Refresh / Clear Console and a console bridge. |
@@ -79,5 +79,6 @@ carries `correctedCode`, `fixedCode`, `correctedLine`, `applyFix`, `patch` or
 ## Resource limits
 
 CPU/time 3s target · wall clock 10–15s · memory 256 MB target · combined output
-200 KB · per-file 50 KB · per-project 500 KB · 30 files · per-user daily and
-cooldown quotas for AI and secure execution.
+200 KB · per-file 50 KB · per-project 500 KB · 30 files · secure execution
+provider limits. AI Deep Help has no app-imposed daily cap or cooldown; the AI
+provider's own quotas and billing still apply.

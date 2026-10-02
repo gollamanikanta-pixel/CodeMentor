@@ -2,16 +2,13 @@ import { useCallback, useEffect, useState } from 'react';
 import { getAiUsage } from '../api/client';
 
 export type AiUsage = {
-  remaining: number;
-  limit: number;
   configured: boolean;
-  cooldownSeconds: number;
 };
 
-const FALLBACK: AiUsage = { remaining: 0, limit: 3, configured: false, cooldownSeconds: 30 };
+const FALLBACK: AiUsage = { configured: false };
 
 /**
- * Reads fair-use accounting from the backend. Failures degrade gracefully to
+ * Reads AI provider readiness from the backend. Failures degrade gracefully to
  * "not configured" so local learning never depends on the API being up.
  */
 export function useAiUsage() {

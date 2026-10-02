@@ -1,10 +1,7 @@
 /** Shared server-side types. No secret values ever live here. */
 
 export type AiUsageSnapshot = {
-  remaining: number;
-  limit: number;
   configured: boolean;
-  cooldownSeconds: number;
 };
 
 export type ExecutionUsageSnapshot = {
