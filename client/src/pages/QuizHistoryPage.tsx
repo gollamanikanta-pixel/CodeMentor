@@ -6,7 +6,7 @@ import { useQuizHistory } from '../hooks/useQuizHistory';
 
 export function QuizHistoryPage() {
   const navigate = useNavigate();
-  const { records: history, synced } = useQuizHistory();
+  const { records: history, synced, loading, error, reload } = useQuizHistory();
   const [query, setQuery] = useState('');
 
   const visible = useMemo(
@@ -33,7 +33,7 @@ export function QuizHistoryPage() {
       </div>
 
       <div className="stats-grid">
-        <StatCard icon={ListChecks} label="Quizzes completed" value={String(history.length)} note={synced ? 'Synced to your account' : 'Saved locally'} tone="indigo" />
+        <StatCard icon={ListChecks} label="Quizzes completed" value={String(history.length)} note={synced ? 'Synced to your account' : error ? 'Account history unavailable' : 'Saved locally'} tone="indigo" />
         <StatCard icon={BarChart3} label="Average score" value={`${average}%`} note="Across your practice" tone="green" />
         <StatCard icon={Target} label="Concepts to review" value={String(reviewCount)} note="Keep going — you’re close" tone="amber" />
       </div>
@@ -49,10 +49,17 @@ export function QuizHistoryPage() {
         <div className="card-heading">
           <div>
             <h2>Recent practice</h2>
-            <p>{synced ? 'Your latest synced quiz sessions' : 'Your latest local quiz sessions'}</p>
+            <p>{synced ? 'Your latest account quiz sessions' : error ? 'Account history is unavailable' : 'Your latest local quiz sessions'}</p>
           </div>
         </div>
-        {visible.length ? (
+        {loading ? (
+          <p role="status">Loading quiz history…</p>
+        ) : error ? (
+          <div role="alert" className="ai-error">
+            <p>{error}</p>
+            <button onClick={() => void reload()}>Try again</button>
+          </div>
+        ) : visible.length ? (
           <div className="history-list">
             {visible.map((item) => (
               <div className="history-row" key={item.id}>
@@ -82,7 +89,7 @@ export function QuizHistoryPage() {
           </div>
         ) : (
           <EmptyState icon={ListChecks} title="No quiz history yet">
-            Generate a local quiz from your own analyzed code to start tracking practice.
+            Generate a local quiz from your own analyzed code to start tracking practice. Signed-in quiz results are saved to your account.
           </EmptyState>
         )}
       </div>

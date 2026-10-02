@@ -8,6 +8,21 @@ export const settingsRoutes = Router();
 
 settingsRoutes.use(requireAuth, requireCsrf);
 
+export const accountSettingsPatchSchema = z.object({
+  theme: z.enum(['dark', 'light', 'system']).optional(),
+  fontSize: z.number().int().min(10).max(28).optional(),
+  wordWrap: z.boolean().optional(),
+  minimap: z.boolean().optional(),
+  reducedMotion: z.boolean().optional(),
+  explanationLevel: z.enum(['Beginner', 'Intermediate', 'Advanced']).optional(),
+  hintLevel: z.enum(['Gentle', 'Guided', 'Learning']).optional(),
+  defaultLanguage: z.string().min(1).max(40).optional(),
+  automaticVisuals: z.boolean().optional(),
+  automaticQuizReadiness: z.boolean().optional(),
+  autosave: z.boolean().optional(),
+  aiDeepHelp: z.boolean().optional(),
+});
+
 type SettingsRow = {
   theme: string;
   fontSize: number;
@@ -53,22 +68,7 @@ async function ensureRow(userId: string): Promise<SettingsRow> {
 settingsRoutes.get('/', async (req: AuthRequest, res) => res.json({ settings: toSettings(await ensureRow(req.userId!)) }));
 
 settingsRoutes.put('/', async (req: AuthRequest, res) => {
-  const parsed = z
-    .object({
-      theme: z.enum(['dark', 'light', 'system']).optional(),
-      fontSize: z.number().int().min(10).max(28).optional(),
-      wordWrap: z.boolean().optional(),
-      minimap: z.boolean().optional(),
-      reducedMotion: z.boolean().optional(),
-      explanationLevel: z.enum(['Beginner', 'Intermediate', 'Advanced']).optional(),
-      hintLevel: z.enum(['Gentle', 'Guided', 'Learning']).optional(),
-      defaultLanguage: z.string().min(1).max(40).optional(),
-      automaticVisuals: z.boolean().optional(),
-      automaticQuizReadiness: z.boolean().optional(),
-      autosave: z.boolean().optional(),
-      aiDeepHelp: z.boolean().optional(),
-    })
-    .safeParse(req.body);
+  const parsed = accountSettingsPatchSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ message: 'Invalid settings update.' });
 
   await ensureRow(req.userId!);

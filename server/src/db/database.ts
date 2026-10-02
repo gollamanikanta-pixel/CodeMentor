@@ -4,10 +4,10 @@ import { env } from '../config/env.js';
 /**
  * Postgres (Supabase) data layer.
  *
- * Call sites keep the shape `db.prepare(sql).get/all/run(...params)` and the
- * `?` placeholder style they had with SQLite, but every call is async. Postgres
- * folds unquoted identifiers to lower case, so result keys are mapped back to
- * the camelCase names the rest of the server (and the client) expect.
+ * Call sites use `db.prepare(sql).get/all/run(...params)` with `?` placeholders.
+ * Every call is async. Postgres folds unquoted identifiers to lower case, so
+ * result keys are mapped back to the camelCase names the rest of the server
+ * (and the client) expect.
  */
 
 // COUNT(*)/SUM() come back as bigint (string) by default; our counts are small.

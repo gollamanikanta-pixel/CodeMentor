@@ -115,8 +115,8 @@ export function AiHelpDialog({
           <div className="ai-status warning">
             <strong>AI Deep Help is not configured on this server.</strong>
             <p>
-              Everything local — analysis, hints, visuals and quizzes — is fully available. A teacher or administrator can enable AI
-              Deep Help later by configuring the backend only.
+              Everything local — analysis, hints, visuals and quizzes — is fully available. A deployment administrator can configure
+              AI_API_BASE_URL, AI_API_KEY and AI_MODEL on the backend only. Never enter provider credentials in the browser.
             </p>
           </div>
         ) : (

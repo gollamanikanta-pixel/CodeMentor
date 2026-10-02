@@ -11,7 +11,7 @@
     "db:generate": "tsx src/db/generate.ts",
     "db:migrate": "tsx src/db/migrate.ts",
     "db:seed": "tsx src/db/seed.ts",
-    "test": "tsx --test src/utils/hash.test.ts src/tests/auth.test.ts src/tests/authFlowGuard.test.ts src/tests/providers.test.ts src/tests/pathSafety.test.ts src/tests/validatorsAndCache.test.ts src/tests/pistonNormalizer.test.ts src/tests/judge0Normalizer.test.ts src/tests/aiService.test.ts"
+    "test": "tsx --test src/utils/hash.test.ts src/tests/auth.test.ts src/tests/authFlowGuard.test.ts src/tests/providers.test.ts src/tests/pathSafety.test.ts src/tests/validatorsAndCache.test.ts src/tests/pistonNormalizer.test.ts src/tests/judge0Normalizer.test.ts src/tests/aiService.test.ts src/tests/settingsRoutes.test.ts"
   },
   "dependencies": {
     "bcryptjs": "latest",

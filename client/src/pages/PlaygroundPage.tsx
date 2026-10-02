@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   Bot,
   ChevronDown,
@@ -27,6 +27,7 @@ import { AiHelpDialog } from '../components/AiHelpDialog';
 import { usePlayground } from '../hooks/usePlayground';
 import { useToast } from '../hooks/useToast';
 import { useSettings } from '../settings/SettingsContext';
+import { useAuth } from '../auth/AuthContext';
 import { Type } from 'lucide-react';
 import {
   detectLanguageFromFilename,
@@ -36,6 +37,15 @@ import {
   languageNames,
 } from '../data/languages';
 import { saveProject as persistProject } from '../projects/projectStore';
+import {
+  createProject,
+  createProjectFile,
+  deleteProject,
+  deleteProjectFile,
+  getProject,
+  updateProject,
+  updateProjectFile,
+} from '../api/client';
 import type { LanguageName, StoredProject } from '../types';
 
 const MAX_UPLOAD_BYTES = 51200;
@@ -43,9 +53,16 @@ const MAX_UPLOAD_BYTES = 51200;
 export function PlaygroundPage() {
   const playground = usePlayground();
   const { settings, update } = useSettings();
+  const { user } = useAuth();
+  const [searchParams] = useSearchParams();
+  const requestedProjectId = searchParams.get('projectId');
   const { notify } = useToast();
   const [analysisTab, setAnalysisTab] = useState<AnalysisTab>('Overview');
   const [aiOpen, setAiOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [savedProjectId, setSavedProjectId] = useState<string>();
+  const [savedFileId, setSavedFileId] = useState<string>();
+  const [savedFilePath, setSavedFilePath] = useState('');
   const [revealAfterRun, setRevealAfterRun] = useState(false);
   const jumpToEditorLine = useRef<(line: number) => void>(() => {});
 
@@ -72,6 +89,50 @@ export function PlaygroundPage() {
   useEffect(() => {
     if (playground.running) revealConsole();
   }, [playground.running, revealConsole]);
+
+  useEffect(() => {
+    if (!requestedProjectId) {
+      setSavedProjectId(undefined);
+      setSavedFileId(undefined);
+      setSavedFilePath('');
+      return;
+    }
+    if (!user) return;
+    let cancelled = false;
+    void (async () => {
+      const detail = await getProject(requestedProjectId);
+      if (cancelled) return;
+      if (!detail) {
+        notify('That account project could not be loaded.', 'warning');
+        return;
+      }
+      const entryPath =
+        detail.project.entryFile ||
+        detail.files.find((file) => file.isEntryFile)?.relativePath ||
+        detail.files[0]?.relativePath;
+      const entry = detail.files.find((file) => file.relativePath === entryPath) ?? detail.files[0];
+      const projectLanguage = detail.project.primaryLanguage as LanguageName;
+      playground.setLanguage(projectLanguage, { loadStarter: !entry });
+      if (entry) playground.setCode(entry.content);
+      playground.setProjectTitle(detail.project.title);
+      setSavedProjectId(detail.project.id);
+      setSavedFileId(entry?.id);
+      setSavedFilePath(entry?.relativePath ?? '');
+      notify('Account project loaded.', 'success');
+    })().catch(() => {
+      if (!cancelled) notify('Your account project could not be loaded. No local project was substituted.', 'warning');
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    notify,
+    playground.setCode,
+    playground.setLanguage,
+    playground.setProjectTitle,
+    requestedProjectId,
+    user,
+  ]);
 
   useEffect(() => {
     if (!revealAfterRun || playground.running || !playground.execution) return;
@@ -145,7 +206,7 @@ export function PlaygroundPage() {
     reader.readAsText(file);
   };
 
-  const save = () => {
+  const save = async () => {
     const project: StoredProject = {
       id: crypto.randomUUID(),
       title: playground.projectTitle || 'Untitled learning program',
@@ -155,8 +216,71 @@ export function PlaygroundPage() {
       updatedAt: new Date().toISOString(),
       status: languageAvailable ? config?.statusLabel : 'Coming soon',
     };
-    persistProject(project);
-    notify('Saved locally in this browser.');
+    if (!user) {
+      persistProject(project);
+      notify('Saved locally in this browser. Sign in to save projects to your account.', 'info');
+      return;
+    }
+    if (!playground.code.trim()) {
+      notify('Add source code before saving an account project.', 'warning');
+      return;
+    }
+    const title = playground.projectTitle.trim();
+    if (!title || title.length > 120) {
+      notify('Project titles must be between 1 and 120 characters.', 'warning');
+      return;
+    }
+    const extension = config?.extensions[0] ?? '.txt';
+    const relativePath = `${language === 'Java' ? 'Main' : 'main'}${extension}`;
+    const filename = relativePath.split('/').pop()!;
+    setSaving(true);
+    try {
+      let projectId = savedProjectId;
+      let fileId = savedFileId;
+      if (!projectId) {
+        const created = await createProject({ title, primaryLanguage: language, entryFile: relativePath });
+        if (!created.ok) throw new Error(created.data.message || 'Project could not be saved to your account.');
+        projectId = created.data.project.id;
+        const createdFile = await createProjectFile(projectId, {
+          relativePath,
+          filename,
+          language,
+          content: playground.code,
+          isEntryFile: true,
+        });
+        if (!createdFile.ok) {
+          await deleteProject(projectId);
+          throw new Error(createdFile.data.message || 'Project source could not be saved to your account.');
+        }
+        fileId = createdFile.data.file.id;
+      } else {
+        const updated = await updateProject(projectId, { title, primaryLanguage: language, entryFile: relativePath });
+        if (!updated.ok) throw new Error(updated.data.message || 'Project details could not be updated.');
+        if (fileId && savedFilePath === relativePath) {
+          const updatedFile = await updateProjectFile(projectId, fileId, { content: playground.code, isEntryFile: true });
+          if (!updatedFile.ok) throw new Error(updatedFile.data.message || 'Project source could not be updated.');
+        } else {
+          const createdFile = await createProjectFile(projectId, {
+            relativePath,
+            filename,
+            language,
+            content: playground.code,
+            isEntryFile: true,
+          });
+          if (!createdFile.ok) throw new Error(createdFile.data.message || 'Project source could not be saved.');
+          if (fileId) await deleteProjectFile(projectId, fileId);
+          fileId = createdFile.data.file.id;
+        }
+      }
+      setSavedProjectId(projectId);
+      setSavedFileId(fileId);
+      setSavedFilePath(relativePath);
+      notify('Project and source saved to your account.', 'success');
+    } catch (cause) {
+      notify(cause instanceof Error ? cause.message : 'Project could not be saved to your account.', 'warning');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -168,8 +292,8 @@ export function PlaygroundPage() {
           <p>Experiment freely. CodeMentor AI will help you learn what happened and why.</p>
         </div>
         <div className="heading-actions">
-          <Button variant="soft" icon={Save} onClick={save}>
-            Save project
+          <Button variant="soft" icon={Save} disabled={saving} onClick={() => void save()}>
+            {saving ? 'Saving…' : 'Save project'}
           </Button>
           <Button icon={Play} onClick={runAndMaybeAnalyze} disabled={!canRun || playground.running}>
             Run Code
@@ -285,7 +409,7 @@ export function PlaygroundPage() {
 
           <div className="editor-footer">
             <span>
-              <span className="status-dot green-dot" aria-hidden="true" /> {settings.autosave ? 'Autosaved locally' : 'Autosave off'}
+              <span className="status-dot green-dot" aria-hidden="true" /> {settings.autosave ? 'Draft autosaved locally' : 'Autosave off'}
             </span>
             <span>
               Spaces: 4 · UTF-8 · {language}
@@ -310,7 +434,7 @@ export function PlaygroundPage() {
           {analysisTab === 'Visuals' ? (
             <VisualsTab analysis={playground.analysis} />
           ) : analysisTab === 'Quiz' ? (
-            <QuizPanel analysis={playground.analysis} language={language} projectTitle={playground.projectTitle} />
+            <QuizPanel analysis={playground.analysis} language={language} projectTitle={playground.projectTitle} projectId={savedProjectId} />
           ) : null}
         </AnalysisPanel>
       </div>

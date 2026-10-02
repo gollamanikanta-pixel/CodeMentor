@@ -12,6 +12,7 @@ import {
 import {
   createProject,
   createProjectFile,
+  deleteProjectFile,
   getProject,
   listProjects,
   runProjectExecution,
@@ -155,7 +156,10 @@ export function MultiFileWorkspace({ user }: { user: AccountUser }) {
   const [consoleLines, setConsoleLines] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const savedFileIds = useRef<Set<string>>(new Set());
 
   const current = files.find((file) => file.relativePath === active) ?? files[0];
   const currentLanguageConfig = current ? detectLanguageFromFilename(current.filename) : undefined;
@@ -165,38 +169,44 @@ export function MultiFileWorkspace({ user }: { user: AccountUser }) {
   const isWebProject = files.some((file) => file.extension === '.html' || file.extension === '.htm');
   const totalBytes = useMemo(() => files.reduce((sum, file) => sum + new Blob([file.content]).size, 0), [files]);
 
-  // Load the first synced project, or seed a new web project on first visit.
+  // Load only account-owned projects; local starter files are never presented
+  // as a successful account load when the protected API is unavailable.
   useEffect(() => {
     let cancelled = false;
     void (async () => {
+      setLoadError('');
+      let hasUnsavedStarter = false;
       try {
         const projects = await listProjects();
         const existing = projects[0];
         if (existing) {
           const detail = await getProject(existing.id);
           if (cancelled) return;
+          if (!detail) throw new Error('Your saved project could not be loaded from the account.');
           setProjectId(existing.id);
           setTitle(existing.title);
-          const loaded = detail?.files?.map(toFileRecord) ?? [];
+          const loaded = detail.files.map(toFileRecord);
+          savedFileIds.current = new Set(loaded.flatMap((file) => file.id ? [file.id] : []));
           const seed = loaded.length ? loaded : WEB_STARTER;
           setFiles(seed);
           setActive(seed[0]?.relativePath ?? 'index.html');
           setEntryFile(existing.entryFile || seed.find((f) => f.isEntryFile)?.relativePath || 'index.html');
+          if (!loaded.length) hasUnsavedStarter = true;
         } else {
           const created = await createProject({ title: 'My web learning project', primaryLanguage: 'HTML', entryFile: 'index.html' });
-          if (cancelled || !created.ok) return;
+          if (cancelled) return;
+          if (!created.ok) throw new Error(created.data.message || 'A new account project could not be created.');
           setProjectId(created.data.project.id);
           setFiles(WEB_STARTER);
           setActive('index.html');
           setEntryFile('index.html');
+          hasUnsavedStarter = true;
         }
-        setStatus('Ready');
-      } catch {
+        setStatus(hasUnsavedStarter ? 'Starter files are unsaved — save to your account' : 'Ready');
+      } catch (error) {
         if (!cancelled) {
-          setFiles(WEB_STARTER);
-          setActive('index.html');
-          setStatus('Ready locally — save after the API is available.');
-          notify('Workspace is ready locally. Save after the API is available.', 'info');
+          setLoadError(error instanceof Error ? error.message : 'Your account workspace could not be loaded. No browser-local project was substituted.');
+          setStatus('Account storage unavailable');
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -205,7 +215,7 @@ export function MultiFileWorkspace({ user }: { user: AccountUser }) {
     return () => {
       cancelled = true;
     };
-  }, [notify]);
+  }, [loadAttempt, notify]);
 
   // Render the sandboxed preview and pipe its console output back to us.
   useEffect(() => {
@@ -235,8 +245,10 @@ export function MultiFileWorkspace({ user }: { user: AccountUser }) {
     return () => window.removeEventListener('message', receive);
   }, [tab, entryFile, files, isWebProject]);
 
-  const updateCurrent = (content: string) =>
+  const updateCurrent = (content: string) => {
     setFiles((items) => items.map((file) => (file.relativePath === active ? { ...file, content } : file)));
+    setStatus('Unsaved changes');
+  };
 
   const addFile = () => {
     const name = window.prompt('New file path (for example src/helper.c or styles.css)');
@@ -254,6 +266,7 @@ export function MultiFileWorkspace({ user }: { user: AccountUser }) {
     };
     setFiles((items) => [...items, file]);
     setActive(name);
+    setStatus('Unsaved changes');
     notify('New file added.');
   };
 
@@ -263,25 +276,35 @@ export function MultiFileWorkspace({ user }: { user: AccountUser }) {
     if (!window.confirm(`Delete ${current.relativePath}?`)) return;
     setFiles((items) => items.filter((file) => file.relativePath !== current.relativePath));
     setActive(files.find((file) => file.relativePath !== current.relativePath)?.relativePath || '');
+    setStatus('Unsaved changes');
   };
 
-  const save = async () => {
-    if (!projectId) return notify('Create or load a project before saving.', 'warning');
+  const save = async (): Promise<boolean> => {
+    if (!projectId) {
+      notify('Create or load a project before saving.', 'warning');
+      return false;
+    }
     if (
       files.length > LIMITS.files ||
       totalBytes > LIMITS.projectBytes ||
       files.some((file) => new Blob([file.content]).size > LIMITS.fileBytes)
     ) {
-      return notify('Project exceeds the safe file or project size limit.', 'warning');
+      notify('Project exceeds the safe file or project size limit.', 'warning');
+      return false;
     }
     setBusy(true);
     setStatus('Saving project');
     try {
-      await updateProject(projectId, { title, entryFile });
+      const projectUpdate = await updateProject(projectId, { title, entryFile });
+      if (!projectUpdate.ok) throw new Error(projectUpdate.data.message || 'Project details could not be saved.');
+      const retainedFileIds = new Set<string>();
+      const newIds = new Map<string, string>();
       for (const file of files) {
         const isEntry = file.relativePath === entryFile;
         if (file.id) {
-          await updateProjectFile(projectId, file.id, { content: file.content || '\n', isEntryFile: isEntry });
+          const updated = await updateProjectFile(projectId, file.id, { content: file.content || '\n', isEntryFile: isEntry });
+          if (!updated.ok) throw new Error(updated.data.message || `File ${file.relativePath} could not be updated.`);
+          retainedFileIds.add(file.id);
         } else {
           const created = await createProjectFile(projectId, {
             relativePath: file.relativePath,
@@ -290,14 +313,28 @@ export function MultiFileWorkspace({ user }: { user: AccountUser }) {
             content: file.content || '\n',
             isEntryFile: isEntry,
           });
-          if (created.ok) file.id = created.data.file.id;
+          if (!created.ok) throw new Error(created.data.message || `File ${file.relativePath} could not be saved.`);
+          retainedFileIds.add(created.data.file.id);
+          newIds.set(file.relativePath, created.data.file.id);
         }
       }
+      for (const oldId of savedFileIds.current) {
+        if (retainedFileIds.has(oldId)) continue;
+        const removed = await deleteProjectFile(projectId, oldId);
+        if (!removed.ok) throw new Error(removed.data.message || 'A removed account file could not be deleted.');
+      }
+      savedFileIds.current = retainedFileIds;
+      setFiles((currentFiles) => currentFiles.map((file) => {
+        const id = newIds.get(file.relativePath);
+        return id ? { ...file, id } : file;
+      }));
       setStatus('Saved');
       notify('Project and files saved to your account.');
-    } catch {
+      return true;
+    } catch (error) {
       setStatus('Save failed');
-      notify('Project could not be saved safely.', 'warning');
+      notify(error instanceof Error ? error.message : 'Project could not be saved safely.', 'warning');
+      return false;
     } finally {
       setBusy(false);
     }
@@ -371,6 +408,7 @@ export function MultiFileWorkspace({ user }: { user: AccountUser }) {
       setTab('preview');
       return;
     }
+    if (!(await save())) return;
     setBusy(true);
     setStatus('Uploading to secure runner');
     try {
@@ -399,13 +437,25 @@ export function MultiFileWorkspace({ user }: { user: AccountUser }) {
     );
   }
 
+  if (loadError) {
+    return (
+      <div className="content-page">
+        <div className="card" role="alert" style={{ padding: 24 }}>
+          <h1>Account workspace unavailable</h1>
+          <p>{loadError}</p>
+          <Button onClick={() => { setLoading(true); setLoadAttempt((attempt) => attempt + 1); }}>Retry account load</Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="workspace-page">
       <div className="page-heading">
         <div>
           <span className="eyebrow">AUTHENTICATED MULTI-FILE WORKSPACE</span>
           <h1>
-            <input className="workspace-title-input" value={title} onChange={(e) => setTitle(e.target.value)} aria-label="Project title" />
+            <input className="workspace-title-input" value={title} onChange={(e) => { setTitle(e.target.value); setStatus('Unsaved changes'); }} aria-label="Project title" />
           </h1>
           <p>Files are validated, owned by your account, and saved through the protected project API.</p>
         </div>
@@ -467,7 +517,7 @@ export function MultiFileWorkspace({ user }: { user: AccountUser }) {
           </div>
 
           <div className="workspace-controls">
-            <select value={entryFile} onChange={(e) => setEntryFile(e.target.value)} aria-label="Entry file">
+            <select value={entryFile} onChange={(e) => { setEntryFile(e.target.value); setStatus('Unsaved changes'); }} aria-label="Entry file">
               <option value="">No entry file</option>
               {files
                 .filter((file) => ['.html', '.htm', '.c', '.cpp', '.cc', '.cxx', '.hpp', '.java'].includes(file.extension))

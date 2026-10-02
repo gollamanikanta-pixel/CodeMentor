@@ -199,6 +199,7 @@ export type StoredProject = {
 export type QuizRecord = {
   id: string;
   project: string;
+  projectId?: string;
   language: LanguageName;
   difficulty: string;
   score: number;

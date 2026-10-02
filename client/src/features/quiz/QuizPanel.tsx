@@ -19,10 +19,12 @@ export function QuizPanel({
   analysis,
   language,
   projectTitle,
+  projectId,
 }: {
   analysis: LocalAnalysis | null;
   language: AnalysisLanguage;
   projectTitle: string;
+  projectId?: string;
 }) {
   const { notify } = useToast();
   const { addRecord } = useQuizHistory();
@@ -89,6 +91,7 @@ export function QuizPanel({
     const record: QuizRecord = {
       id: crypto.randomUUID(),
       project: projectTitle,
+      projectId,
       language: language as QuizRecord['language'],
       difficulty,
       score: finalScore,
@@ -98,7 +101,8 @@ export function QuizPanel({
       conceptsToReview,
     };
     void addRecord(record).then((result) => {
-      if (result.saved) notify('Quiz saved to your account.');
+      if (!result.saved) notify(result.message, 'warning');
+      else notify(result.local ? 'Quiz history saved in this browser.' : 'Quiz saved to your account.', 'success');
     });
     setFinished(true);
   };

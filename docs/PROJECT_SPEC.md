@@ -41,7 +41,7 @@ carries `correctedCode`, `fixedCode`, `correctedLine`, `applyFix`, `patch` or
 | Protected routing + safe return path | **Implemented** | `ProtectedRoute` + `safeReturnPath`. |
 | Dashboard | **Implemented** | Welcome, stats, quick language starts, recent projects, concepts to review, encouragement. |
 | Landing + policy pages | **Implemented** | Landing CTAs are auth-aware; `/privacy` and `/terms` are real pages. |
-| SQLite schema + migrations | **Implemented** | Node's built-in `node:sqlite`; `ensureSchema()` + `npm run db:migrate`. |
+| Postgres schema + migrations | **Implemented** | Existing Railway Postgres design; `server/src/db/schema.sql` + `npm run db:migrate`. |
 | Project / file APIs | **Implemented** | Owner-scoped CRUD, `safePath`, file/byte/count caps, Zod validation. |
 | Multi-file workspace | **Implemented** | Explorer, tabs, entry file, rename-free add/delete, themed Monaco, save. |
 | Sandboxed HTML/CSS/JS preview | **Implemented (workspace)** | `allow-scripts` iframe, external resources blocked, console bridge. |
@@ -49,7 +49,7 @@ carries `correctedCode`, `fixedCode`, `correctedLine`, `applyFix`, `patch` or
 | JavaScript browser runner | **Implemented** | Dedicated worker, `console` capture, `input()`, timeout. |
 | Local analysis (Python / JS / TS / SQL) | **Implemented** | Rule-based, with progressive hints and uncertainty labels. |
 | Local visuals (9 kinds) | **Implemented** | SVG + safe Mermaid from detected structure. |
-| Local quizzes + history | **Implemented (client)** | Generated locally; history stored locally. |
+| Local quizzes + account history | **Implemented** | Generated locally; completed signed-in quiz results use the protected Postgres-backed API. |
 | Settings | **Implemented (client)** | Theme, font size, wrap, minimap, motion, levels, language, autosave, AI toggle. |
 | AI Deep Help | **Implemented** | Backend-only, account-gated, cache/quota/cooldown, honest unavailable state. |
 | Secure remote runner (C/C++/Java) | **Provider interface + honest fallback** | Real HTTPS adapter; no local compiler, no `child_process`. Needs `EXECUTION_*` config. |
@@ -62,7 +62,7 @@ carries `correctedCode`, `fixedCode`, `correctedLine`, `applyFix`, `patch` or
 | Execution job live status (SSE/WebSocket) | **Not yet** | Jobs are recorded and readable; progress is not streamed. |
 | Provider-backed cancellation | **Honest fallback** | `POST /api/executions/:jobId/cancel` reports “not supported” rather than pretending. |
 | Standalone CSS language | **Not yet** | CSS is handled inside HTML projects and the multi-file workspace. |
-| Prisma / Drizzle ORM | **Deliberate deviation** | Uses Node's built-in `node:sqlite` instead; see Deviations. |
+| Prisma / Drizzle ORM | **Deliberate deviation** | Uses direct parameterized Postgres queries instead; see Deviations. |
 | Tailwind CSS | **Deliberate deviation** | Uses a hand-written token design system in `client/src/index.css`. |
 | Seed + generate scripts | **Implemented** | `db:seed` creates a demo learner/project/history; `db:generate` validates the schema. |
 
@@ -70,9 +70,9 @@ carries `correctedCode`, `fixedCode`, `correctedLine`, `applyFix`, `patch` or
 
 1. **No Tailwind.** The UI is a hand-written, token-based stylesheet so the app
    ships no unused utility classes and the palette lives in one place.
-2. **No Prisma/Drizzle.** Persistence uses Node's built-in `node:sqlite`
-   (`DatabaseSync`) so a fresh checkout needs no code generation step. The
-   schema is plain SQL in `server/src/db/schema.sql`.
+2. **No Prisma/Drizzle.** Persistence uses the `pg` driver with parameterized
+   queries against the existing Postgres database. The schema is plain SQL in
+   `server/src/db/schema.sql`; Railway's Postgres architecture is retained.
 3. **`sessionStorage`/`localStorage` hold no credentials.** Only draft data and
    preferences are stored client-side.
 

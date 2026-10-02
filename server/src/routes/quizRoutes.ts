@@ -10,6 +10,7 @@ quizRoutes.use(requireAuth, requireCsrf);
 
 type QuizRow = {
   id: string;
+  projectId?: string | null;
   projectName: string | null;
   language: string;
   difficulty: string;
@@ -31,6 +32,7 @@ function toRecord(row: QuizRow) {
   }
   return {
     id: row.id,
+    projectId: row.projectId ?? undefined,
     project: row.projectName ?? 'Untitled project',
     language: row.language,
     difficulty: row.difficulty,
@@ -42,7 +44,7 @@ function toRecord(row: QuizRow) {
   };
 }
 
-const SELECT = `SELECT q.id, q.language, q.difficulty, q.score, q.totalQuestions, q.percentage,
+const SELECT = `SELECT q.id, q.projectId, q.language, q.difficulty, q.score, q.totalQuestions, q.percentage,
   q.conceptsToReview, q.createdAt, p.title AS projectName
   FROM QuizHistory q LEFT JOIN Project p ON p.id = q.projectId`;
 

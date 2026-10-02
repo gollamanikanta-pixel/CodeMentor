@@ -108,6 +108,7 @@ export type ProjectRecord = {
   title: string;
   primaryLanguage: string;
   entryFile: string | null;
+  createdAt: string;
   updatedAt: string;
 };
 

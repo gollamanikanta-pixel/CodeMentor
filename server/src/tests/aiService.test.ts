@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { parseProviderResponse, shapeResponse } from '../services/aiService.js';
+import { accountAllowsAiDeepHelp } from '../services/aiPreferences.js';
 
 const validGuidance = {
   summary: 'This function calculates an average.',
@@ -59,4 +60,14 @@ test('parseProviderResponse reads OpenAI-compatible JSON responses', () => {
   );
   assert.equal(response.summary, validGuidance.summary);
   assert.equal(response.deeperExplanation, validGuidance.deeperExplanation);
+});
+
+test('account AI preference defaults on and can disable Deep Help server-side', () => {
+  assert.equal(accountAllowsAiDeepHelp(undefined), true);
+  assert.equal(accountAllowsAiDeepHelp(null), true);
+  assert.equal(accountAllowsAiDeepHelp(1), true);
+  assert.equal(accountAllowsAiDeepHelp(true), true);
+  assert.equal(accountAllowsAiDeepHelp(0), false);
+  assert.equal(accountAllowsAiDeepHelp('0'), false);
+  assert.equal(accountAllowsAiDeepHelp(false), false);
 });

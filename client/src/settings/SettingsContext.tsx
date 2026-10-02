@@ -13,13 +13,6 @@ type SettingsContextValue = {
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);
 
-/** Client key → UserSettings column. Only three names differ. */
-const SERVER_KEY: Partial<Record<keyof CodeMentorSettings, string>> = {
-  automaticVisuals: 'autoVisuals',
-  automaticQuizReadiness: 'autoQuizReadiness',
-  aiDeepHelp: 'aiDeepHelpEnabled',
-};
-
 function resolveTheme(preference: CodeMentorSettings['theme'], prefersDark: boolean): 'dark' | 'light' {
   if (preference === 'system') return prefersDark ? 'dark' : 'light';
   return preference;
@@ -38,11 +31,21 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const update = useCallback<SettingsContextValue['update']>((key, value) => {
     setSettings((current) => ({ ...current, [key]: value }));
     if (userRef.current) {
-      void updateAccountSettings({ [SERVER_KEY[key] ?? key]: value }).catch(() => undefined);
+      void updateAccountSettings({ [key]: value })
+        .then(({ ok }) => setSynced(ok))
+        .catch(() => setSynced(false));
     }
   }, []);
 
-  const reset = useCallback(() => setSettings(normalizeSettings(null)), []);
+  const reset = useCallback(() => {
+    const defaults = normalizeSettings(null);
+    setSettings(defaults);
+    if (userRef.current) {
+      void updateAccountSettings(defaults)
+        .then(({ ok }) => setSynced(ok))
+        .catch(() => setSynced(false));
+    }
+  }, []);
 
   // Local persistence is always active.
   useEffect(() => {
@@ -58,11 +61,14 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }
     if (hydratedFor.current === user.id) return;
     hydratedFor.current = user.id;
+    setSynced(false);
     void (async () => {
       const remote = await getAccountSettings();
       if (remote) {
         setSettings((current) => normalizeSettings({ ...current, ...remote }));
         setSynced(true);
+      } else {
+        setSynced(false);
       }
     })();
   }, [user]);
@@ -71,11 +77,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   // from the learner's local preferences rather than server defaults.
   useEffect(() => {
     if (!user || !synced) return;
-    const payload: Record<string, unknown> = {};
-    (Object.keys(settings) as (keyof CodeMentorSettings)[]).forEach((key) => {
-      payload[SERVER_KEY[key] ?? key] = settings[key];
-    });
-    void updateAccountSettings(payload).catch(() => undefined);
+    void updateAccountSettings(settings)
+      .then(({ ok }) => setSynced(ok))
+      .catch(() => setSynced(false));
     // Intentionally runs on hydration only; per-key updates handle later edits.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [synced, user]);

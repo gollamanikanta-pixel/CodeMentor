@@ -3,6 +3,8 @@ import { Code2, Lightbulb, ShieldCheck, Sparkles, Sun, Trash2 } from 'lucide-rea
 import { Button, Pill } from '../components/ui';
 import { useSettings } from '../settings/SettingsContext';
 import { useToast } from '../hooks/useToast';
+import { useAuth } from '../auth/AuthContext';
+import { useAiUsage } from '../hooks/useAiUsage';
 import { clearCodeMentorData } from '../storage/localStorage';
 import {
   isLanguageAvailable,
@@ -27,7 +29,9 @@ function Switch({ on, onToggle, label }: { on: boolean; onToggle: () => void; la
 }
 
 export function SettingsPage() {
-  const { settings, update, reset } = useSettings();
+  const { settings, update, reset, synced } = useSettings();
+  const { user } = useAuth();
+  const { usage } = useAiUsage();
   const { notify } = useToast();
   const [confirming, setConfirming] = useState(false);
 
@@ -217,8 +221,11 @@ export function SettingsPage() {
             </div>
             <div>
               <h2>Privacy &amp; Data</h2>
-              <p>Your local settings and saved learning data stay in this browser.</p>
+              <p>Your draft is local; saved account projects and quiz history sync to your account.</p>
             </div>
+            <Pill tone={user ? (synced ? 'green' : 'amber') : 'neutral'}>
+              {user ? (synced ? 'Account settings synced' : 'Account settings not synced') : 'Browser settings'}
+            </Pill>
           </div>
           <div className="setting-row">
             <div>
@@ -243,7 +250,7 @@ export function SettingsPage() {
             </Button>
           ) : (
             <div className="confirm-row">
-              <Pill tone="amber">This removes saved projects, drafts and quiz history</Pill>
+              <Pill tone="amber">Clears this browser only; account projects and quiz history are not deleted</Pill>
               <Button variant="danger" icon={Trash2} onClick={clearData}>
                 Yes, clear local data
               </Button>
@@ -267,9 +274,20 @@ export function SettingsPage() {
           <div className="setting-row">
             <div>
               <strong>Enable AI Deep Help</strong>
-              <span>Only used when you explicitly request deeper guidance.</span>
+              <span>Only used when you explicitly request deeper guidance. This preference is checked by the account API.</span>
             </div>
             <Switch on={settings.aiDeepHelp} onToggle={() => update('aiDeepHelp', !settings.aiDeepHelp)} label="AI Deep Help" />
+          </div>
+          <div className="privacy-note">
+            <Sparkles size={18} aria-hidden="true" />
+            <div>
+              <strong>{usage.configured ? 'Provider configured on this server' : 'Provider not configured on this server'}</strong>
+              <p>
+                {usage.configured
+                  ? 'Deep Help requests go through the authenticated backend. Provider credentials remain server-only and are never sent to this browser.'
+                  : 'An administrator can enable this feature by setting AI_API_BASE_URL, AI_API_KEY, and AI_MODEL on the server. Never enter provider credentials in browser settings.'}
+              </p>
+            </div>
           </div>
         </div>
       </div>

@@ -12,7 +12,7 @@ npm test --prefix server
 npm test --prefix runner
 npm run check     # client and server TypeScript checks
 npm run build     # production client build
-npm run db:generate # validate schema against SQLite
+npm run db:generate # validate Postgres schema
 ```
 
 ### What is covered
@@ -34,6 +34,8 @@ npm run db:generate # validate schema against SQLite
 | `server/src/tests/judge0Normalizer.test.ts` | Judge0 CE payloads map to the same honest statuses (Accepted → success, Wrong Answer → success, Compilation Error → compilation_error with the reported line, TLE, SIGSEGV runtimes, Internal Error), seconds → ms and KB → bytes are converted, nothing is invented for an unknown status, and all nine compiled languages map to a Judge0 language id. |
 | `server/src/tests/pathSafety.test.ts` | Safe relative paths are accepted; traversal, absolute, hidden, unsupported and executable paths are rejected. |
 | `server/src/tests/validatorsAndCache.test.ts` | Run/deep-help Zod contracts (limits, defaults, rejected languages/sections), `TtlCache` expiry, order-independent cache keys and the AI excerpt budget. |
+| `server/src/tests/aiService.test.ts` | Provider response parsing/shape validation and account preference defaults/disable behavior for Deep Help. |
+| `server/src/tests/settingsRoutes.test.ts` | Account settings accept the client preference names for AI/learning toggles and never accept provider credentials as account settings. |
 
 ### Verifying the v2 backend manually
 
@@ -48,6 +50,14 @@ curl -o NUL -w "%{http_code}" http://localhost:5000/api/projects        # 401 wi
 A state-changing request (register, save project, run execution) must send the
 CSRF cookie value back in an `x-csrf-token` header, and a project file path such
 as `../evil.js` must be rejected with `Unsafe relative path.`
+
+For account-data flows, verify a signed-in Playground save creates a project
+and source file through `/api/projects`, reopening it loads that source, and a
+completed quiz appears in `/api/quizzes`. If either API is unavailable, the UI
+must report the account-storage error rather than showing browser-local data as
+synced. Toggle **Enable AI Deep Help** off in account settings and confirm the
+authenticated `/api/deep-analyze` request is rejected by the server; provider
+credentials must remain in server environment configuration only.
 
 ### What is not yet automated
 

@@ -1,10 +1,9 @@
 # CodeMentor architecture
 
-CodeMentor is a local-first learning workspace. **Nothing about learning requires
-an account or the backend**: Python and JavaScript run in browser workers, and
-all analysis, visuals and quizzes are generated locally. The backend is optional
-and adds exactly three things — optional accounts, server-side project sync, and
-a delegated secure runner for compiled languages.
+CodeMentor is an authenticated learning workspace with local-first guidance.
+Analysis, visuals and quiz generation run locally, while account-owned projects,
+source files, preferences and quiz history use the protected Postgres API.
+Playground drafts remain local until explicitly saved.
 
 ```
 Browser (React + Vite)                         Backend (Express + TS)
@@ -14,14 +13,14 @@ layout/       workspace shell                  controllers/  HTTP normalization
 editor/       Monaco adapter (themed)          validators/   Zod schemas
 analyzers/    local Python/JS/TS/SQL rules     services/     AI cache + quota
 diagrams/     SVG + Mermaid visuals            providers/    secure-runner adapters
-quizzes/      local question generation        db/           SQLite schema + client
+quizzes/      local question generation        db/           Postgres schema + client
 features/     analysis, visuals, quiz,         auth/         sessions + CSRF
               workspace (multi-file)           middleware/   rate limit + errors
 runners/      browser execution contract       config/       the only env reader
 workers/      Pyodide + JS Web Workers
 storage/      versioned localStorage
 web/          sandboxed HTML preview builder
-auth/         optional account context
+auth/         authenticated account context
 api/          the only place that calls the backend
 ```
 
@@ -35,32 +34,42 @@ A test in `client/tests/localAnalyzer.test.ts` asserts no analysis object ever
 carries `correctedCode`, `fixedCode`, `correctedLine`, `applyFix`, `patch` or
 `replacement`.
 
-## Local-first data flow
+## Local guidance and account data flow
 
 1. The learner types in Monaco. Autosave writes a local draft — no run, no AI.
-2. **Run** posts to a dedicated Web Worker (Pyodide for Python, a `Function`
-   sandbox for JavaScript). The worker is always terminated after the run.
+2. **Run Code** connects to the authenticated interactive runner; HTML preview
+   stays in a sandboxed browser iframe.
 3. The local analyzer runs in the browser and produces a `LocalAnalysis`.
-4. Analysis / Visuals / Quiz render entirely from that object.
-5. **Ask AI for Deeper Help** is the only path to the backend, and only when the
-   learner explicitly asks.
+4. Analysis, visuals and quiz questions are generated locally. On completion,
+   a signed-in learner's quiz result is saved through the protected API.
+5. **Save project** explicitly sends the Playground source to account storage;
+   API failures are shown and never silently saved as local account data.
+6. **Ask AI for Deeper Help** is an explicit authenticated request to the
+   backend; the account setting and server-only provider configuration are
+   checked before a provider is called.
 
-## v2: accounts, project sync and the multi-file workspace
+## Accounts, project sync and the multi-file workspace
 
-These extend the app without changing the local-first path.
+These account-backed features coexist with local analysis and draft autosave.
 
-- **`server/src/db/`** — SQLite via Node's built-in `node:sqlite`. `schema.sql`
-  declares `User`, `Session`, `PasswordResetToken`, `UserSettings`, `Project`,
-  `ProjectFile`, `ExecutionJob` and `QuizHistory`. `ensureSchema()` runs at boot
-  (idempotent `IF NOT EXISTS`) and `npm run db:migrate` runs it on demand.
+- **`server/src/db/`** — Postgres via `pg`. `schema.sql` declares `AppUser`,
+  `Session`, `PasswordResetToken`, `UserSettings`, `Project`, `ProjectFile`,
+  `ExecutionJob` and `QuizHistory`. `npm run db:migrate` applies the idempotent
+  schema to the configured Postgres database; boot verifies database connectivity.
 - **`server/src/auth/`** — bcrypt password hashing, opaque session tokens stored
   as SHA-256 hashes, an httpOnly session cookie, and a double-submit CSRF cookie
   (`codementor_csrf`) that every state-changing request must echo in an
-  `x-csrf-token` header. `optionalAuth` attaches a user when present;
-  `requireAuth` guards account-only routes.
+  `x-csrf-token` header. Account data routes require authentication.
 - **`server/src/routes/projectRoutes.ts`** — owner-scoped project and file CRUD.
   Paths are validated (`safePath`), files are capped per project, and a learner
   can only ever read or write their own rows.
+- **Playground and quiz-history flows** — explicit Playground saves persist
+  source files through the protected API. Completed signed-in quiz results and
+  history are account-backed; failed account requests do not fall back to
+  browser-local project/history values.
+- **AI Deep Help** — the authenticated route checks the account's saved AI
+  preference and calls the configured provider from server-only environment
+  variables. Provider credentials and raw configuration never reach the client.
 - **`server/src/routes/authRoutes.ts`** — register / login / logout / me / forgot /
   reset, each Zod-validated. Password reset is deliberately non-enumerable.
 - **`POST /api/executions`** — authenticated, project-aware execution. It snapshots
@@ -83,8 +92,9 @@ These extend the app without changing the local-first path.
   themed Monaco editor, sandboxed preview with a `postMessage` console bridge,
   ZIP import/export, and save-to-account. It reuses the shared `codementor-dark` /
   `codementor-light` Monaco themes so the workspace matches the Playground.
-- **`client/src/auth/AuthContext.tsx`** + **`ProtectedRoute`** — optional account
-  state. Only `/workspace` is guarded; every other route works signed-out.
+- **`client/src/auth/AuthContext.tsx`** + **`ProtectedRoute`** — authenticated
+  account state. Dashboard, Playground, projects, quiz history, settings, help
+  and multi-file workspace require a signed-in learner.
 
 ## Security posture
 

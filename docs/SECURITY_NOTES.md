@@ -67,7 +67,7 @@ the database query is the source of truth.
 ## Secrets
 
 - Secrets are read in exactly one place: `server/src/config/env.ts`.
-- `.env` and the SQLite database are git-ignored. `.env.example` ships
+- `.env` is git-ignored; Postgres credentials remain deployment configuration. `.env.example` ships
   placeholders only.
 - The frontend never receives an API key. There is no `VITE_AI_API_KEY`,
   `VITE_API_KEY`, or `VITE_AI_MODEL`.

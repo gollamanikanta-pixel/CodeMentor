@@ -1,10 +1,13 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BarChart3, Code2, FileCode2, Lightbulb, ListChecks, Plus, Play, Sparkles } from 'lucide-react';
 import { Button, EmptyState, Pill, StatCard } from '../components/ui';
 import { useAuth } from '../auth/AuthContext';
 import { listProjects } from '../projects/projectStore';
+import { listProjects as listAccountProjects, type ProjectRecord } from '../api/client';
 import { useQuizHistory } from '../hooks/useQuizHistory';
+
+type DashboardProject = { id: string; title: string; language: string };
 
 const QUICK_STARTS = [
   { language: 'C', note: 'Systems and algorithms' },
@@ -18,8 +21,30 @@ const QUICK_STARTS = [
 export function DashboardPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [projects] = useState(() => listProjects());
-  const { records: history } = useQuizHistory();
+  const [projects, setProjects] = useState<DashboardProject[]>([]);
+  const [projectError, setProjectError] = useState('');
+  const { records: history, error: historyError } = useQuizHistory();
+
+  useEffect(() => {
+    if (!user) {
+      setProjects(listProjects().map(({ id, title, language }) => ({ id, title, language })));
+      setProjectError('');
+      return;
+    }
+    let cancelled = false;
+    setProjects([]);
+    setProjectError('');
+    void listAccountProjects()
+      .then((records: ProjectRecord[]) => {
+        if (!cancelled) setProjects(records.map(({ id, title, primaryLanguage }) => ({ id, title, language: primaryLanguage })));
+      })
+      .catch(() => {
+        if (!cancelled) setProjectError('Your account projects could not be loaded. No local projects are shown here.');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   const firstName = user?.fullName?.split(' ')[0] || 'learner';
   const average = history.length
@@ -49,9 +74,9 @@ export function DashboardPage() {
       </div>
 
       <div className="stats-grid">
-        <StatCard icon={Code2} label="Projects" value={String(projects.length)} note="Saved in this workspace" tone="indigo" />
-        <StatCard icon={ListChecks} label="Quizzes completed" value={String(history.length)} note="Practice builds confidence" tone="green" />
-        <StatCard icon={BarChart3} label="Average score" value={`${average}%`} note={history.length ? 'Across your quizzes' : 'Start your first quiz'} tone="amber" />
+        <StatCard icon={Code2} label="Projects" value={String(projects.length)} note={user ? 'Saved to your account' : 'Saved in this browser'} tone="indigo" />
+        <StatCard icon={ListChecks} label="Quizzes completed" value={String(history.length)} note={historyError ? 'Account history unavailable' : 'Practice builds confidence'} tone="green" />
+        <StatCard icon={BarChart3} label="Average score" value={`${average}%`} note={historyError ? 'Account history unavailable' : history.length ? 'Across your quizzes' : 'Start your first quiz'} tone="amber" />
       </div>
 
       <section className="dashboard-section">
@@ -82,7 +107,9 @@ export function DashboardPage() {
               <p>Return to a saved program anytime.</p>
             </div>
           </div>
-          {projects.length ? (
+          {projectError ? <p role="alert" className="ai-error">{projectError}</p> : null}
+          {historyError ? <p role="alert" className="ai-error">{historyError}</p> : null}
+          {projectError ? null : projects.length ? (
             <ul className="dashboard-list">
               {projects.slice(0, 5).map((project) => (
                 <li key={project.id}>
@@ -96,7 +123,7 @@ export function DashboardPage() {
             </ul>
           ) : (
             <EmptyState icon={Code2} title="No saved projects yet">
-              Save a program from the Playground and it will appear here.
+              Save a program from the Playground and it will appear here {user ? 'after account sync' : 'from this browser'}.
             </EmptyState>
           )}
         </div>

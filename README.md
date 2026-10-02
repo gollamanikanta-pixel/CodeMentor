@@ -15,12 +15,12 @@ CodeMentor **guides, it never auto-fixes**. It explains errors, highlights likel
 - **Local analysis** — rule-based guidance runs locally without AI, network access or code rewriting. Analyzer code for coming-soon languages remains internal and is not exposed as a supported language choice.
 - **Errors & Learning Hints** — category badge, likely line with confidence, technical message, what happened, why, progressive hints, concept reminder, self-check question and debugging steps.
 - **Local visuals** — accessible SVG data-structure diagrams plus safe Mermaid flowcharts generated from detected structure.
-- **Local quizzes** — concept, true/false, find-issue and debugging-strategy questions with 5/10/15 counts and three difficulty levels, stored in quiz history.
-- **Projects** — save, search, filter, rename, duplicate, export and delete; grid or list view.
-- **Settings** — theme, font size, word wrap, minimap, reduced motion, explanation level, hint level, default language, autosave and AI toggle. All persisted locally.
+- **Local quiz generation** — concept, true/false, find-issue and debugging-strategy questions with 5/10/15 counts and three difficulty levels. Signed-in quiz results and history are stored in the account API; browser-only history is used only without an account.
+- **Projects** — save, search, filter, rename, duplicate, export and delete; signed-in Playground source and project operations use the protected account API. Existing browser-only projects are not presented as account data.
+- **Settings** — appearance, editor and learning preferences persist locally and sync to the signed-in account. Playground drafts remain browser-local; saving a project uploads source only on explicit action.
 - **AI Deep Help (optional)** — one combined backend request per unique code version, stable-hash caching, daily quota and cooldown, honest unavailable state.
-- **Optional accounts (v2)** — register, log in, log out and recover a password. Sessions are opaque httpOnly cookies; every state-changing request is CSRF-checked. Nothing local depends on an account.
-- **Server-side project sync (v2)** — a signed-in learner can save multi-file projects and get durable execution history back from the protected API.
+- **Accounts** — register, log in, log out and recover a password before entering the authenticated workspace. Sessions are opaque httpOnly cookies; every state-changing request is CSRF-checked.
+- **Account-backed projects and quiz history** — source files, projects, settings, quiz history and execution history use owner-scoped protected APIs. If an account request fails, account data is not silently replaced by browser-local data.
 - **Multi-file workspace (v2)** — a file explorer, themed Monaco editor, entry-file selection, ZIP import/export and a sandboxed browser preview for web projects.
 - **Sandboxed web preview (v2)** — HTML/CSS/JS previews run in an `allow-scripts` iframe with external resources blocked and console output streamed back to the learner.
 - **Accessibility** — semantic landmarks, ARIA tabs/dialogs/live regions, visible focus states, 44px+ touch targets, reduced-motion support, and status shown with icons and labels, never colour alone.
@@ -60,7 +60,7 @@ codementor/
 │     ├─ main.tsx                  # providers: ErrorBoundary, Settings, Toast, Auth, Router
 │     ├─ index.css                 # design system
 │     ├─ routeManifest.ts
-│     ├─ auth/AuthContext.tsx      # v2: optional account state
+│     ├─ auth/AuthContext.tsx      # authenticated account state
 │     ├─ web/sandboxPreview.ts     # v2: sandboxed HTML preview builder
 │     ├─ api/client.ts             # frontend -> backend only
 │     ├─ analyzers/
@@ -122,12 +122,12 @@ codementor/
 
 ### Data flow
 
-1. The learner edits code in the browser. Autosave writes a local draft only — no run, no AI.
+1. The learner edits code in the browser. Autosave writes a local draft only — no run, no AI, and no account project is changed until explicit save.
 2. **Run Code** opens an authenticated WebSocket to the interactive runner. Source is sent only after the learner starts a run; the runner launches a fresh E2B sandbox with outbound internet disabled, streams output, and accepts live stdin until completion or cancellation.
 3. The local analyzer runs **in the browser** and produces the `LocalAnalysis` object (summary, concepts, line explanations, errors, hints, tips, diagram, quiz readiness).
 4. The UI renders Analysis, Visuals and Quiz from that object.
 5. **Ask AI for Deeper Help** is the only automatic-free path to the backend. The browser POSTs one combined context; the backend hashes it, serves a cache hit for free, or calls the provider once.
-6. Other backend calls are explicit and account-scoped: signing in, saving a multi-file project, and (for multi-file project execution) using the configured execution provider.
+6. Other backend calls are explicit and account-scoped: signing in, saving Playground or multi-file project source, recording quiz results, and (for multi-file project execution) using the configured execution provider.
 
 ## 4. Technology stack
 
@@ -149,7 +149,7 @@ npm install
 Copy-Item server\.env.example server\.env
 Copy-Item runner\.env.example runner\.env
 
-# 3. Create / validate the SQLite schema and seed the demo learner
+# 3. Validate the Postgres schema and seed the optional demo learner
 npm run db:generate
 npm run db:migrate
 npm run db:seed
@@ -283,19 +283,20 @@ A single shared guard (`executionGuard` / `recordExecution`) enforces the daily 
 
 Endpoints: `POST /api/run` (account-gated: requires a signed-in session and a CSRF token), `GET /api/execution-usage` and `GET /api/execution-capabilities` (open, so fair-use and readiness status show signed out). Responses never include corrected code, correction lines, patches or diffs.
 
-## 8b. Accounts, project sync and the multi-file workspace (v2)
+## 8b. Accounts, project sync and the multi-file workspace
 
-The whole local-first experience works signed-out. These additions are optional and never gate learning:
+Account storage backs authenticated learner data. Local analysis and unsaved drafts stay in the browser, but account projects and quiz history are never silently substituted from local storage:
 
-- **Optional accounts** — register, log in, log out, and password recovery. Passwords are bcrypt-hashed, sessions are opaque httpOnly cookies stored as hashes, and every state-changing request carries a double-submit CSRF token. Password reset is non-enumerable.
-- **Server-side project sync** — signed-in learners save multi-file projects through the owner-scoped project API. Every file path is validated, files are capped per project, and a learner can only read or write their own rows.
-- **Multi-file workspace** — `/workspace` (account-only) pairs a file explorer, the shared themed Monaco editor, entry-file selection, ZIP import/export and a sandboxed preview. Only this route is guarded; the Playground, analysis, visuals and quizzes stay open.
+- **Accounts** — passwords are bcrypt-hashed, sessions are opaque httpOnly cookies stored as hashes, and every state-changing request carries a double-submit CSRF token. Password reset is non-enumerable.
+- **Playground project/source sync** — explicit saves create or update account-owned project source; Projects opens saved source back in the Playground. The autosaved working draft remains local.
+- **Account-backed quiz history** — generated quizzes stay local, while completed signed-in quiz scores are written to the authenticated API. A failed save is reported and is not written to local history as a misleading fallback.
+- **Multi-file workspace** — `/workspace` pairs a file explorer, the shared themed Monaco editor, entry-file selection, ZIP import/export and a sandboxed preview. Files are edited locally until explicitly saved to the protected project API; when account storage is unavailable, the workspace shows an error instead of presenting a local project as synced.
 - **Sandboxed web preview** — HTML/CSS/JS projects render in an `sandbox="allow-scripts"` iframe. External resources and remote `<script src>` / `<link href>` tags are blocked with an explicit notice, and the preview's `console` output is streamed back to the workspace console.
 - **Project execution history** — `POST /api/executions` snapshots the entry file, records a durable `ExecutionJob`, and delegates to the same secure provider. The backend still never compiles or runs learner code.
 
 Endpoints: `GET /api/auth/csrf`, `POST /api/auth/register|login|logout|forgot-password|reset-password`, `GET /api/auth/me`, `GET|POST|PUT|DELETE /api/projects...` and `POST /api/executions`. The provider-backed `POST /api/deep-analyze` and `POST /api/run` require a signed-in session and a CSRF token; all read-only usage endpoints stay open.
 
-SQLite is created automatically at boot (`ensureSchema()`); `npm run db:migrate` applies the same idempotent schema on demand. The database file lives at `DATABASE_URL` (default `file:./data/codementor.db`) and is git-ignored.
+Account data uses the existing Postgres schema (`server/src/db/schema.sql`). `DATABASE_URL` must be a PostgreSQL connection string; `npm run db:migrate` applies the schema to that configured database. The production Railway Postgres design is unchanged.
 
 ## 9. Local analysis, visuals and quizzes
 
@@ -313,9 +314,19 @@ Quizzes are generated locally from the learner's own code, concepts, errors and 
 
 ## 10. AI Deep Help and cost control
 
-AI is **optional, backend-only, and never automatic**. The backend reads `AI_API_BASE_URL`, `AI_API_KEY`, `AI_MODEL`, `AI_API_TIMEOUT_MS`, `AI_DAILY_LIMIT`, `AI_COOLDOWN_SECONDS`, `AI_CACHE_TTL_SECONDS`, `AI_MAX_SOURCE_CHARS` and `AI_MAX_CONTEXT_LINES`. There is no `VITE_AI_API_KEY`, `VITE_API_KEY` or `VITE_AI_MODEL` anywhere. Google AI Studio credentials are sent only to Google's native Gemini endpoint from the server; for this integration use a currently available model such as `gemini-3.5-flash`. Google model availability/load can vary over time.
+AI is **optional, backend-only, and never automatic**. The backend reads `AI_API_BASE_URL`, `AI_API_KEY`, `AI_MODEL`, `AI_API_TIMEOUT_MS`, `AI_DAILY_LIMIT`, `AI_COOLDOWN_SECONDS`, `AI_CACHE_TTL_SECONDS`, `AI_MAX_SOURCE_CHARS` and `AI_MAX_CONTEXT_LINES`. There is no client-side provider key. The service supports OpenAI-compatible chat-completions endpoints and Google's native Gemini API adapter.
 
-- The browser only ever calls `POST /api/deep-analyze` and `GET /api/ai-usage`. Deep Help is account-gated (signed-in session + CSRF token) so fair use stays fair; the usage endpoint stays open so the header can show status signed out. Signed out, the AI dialog offers a sign-in link instead of consuming a request.
+To enable Deep Help, configure all three provider values on the **server only** (for Railway, on the CodeMentor service; never in Vite or browser settings):
+
+```text
+AI_API_BASE_URL=<provider chat-completions URL, or https://generativelanguage.googleapis.com for Gemini>
+AI_API_KEY=<provider credential>
+AI_MODEL=<model name available to your provider account>
+```
+
+For OpenAI-compatible providers, `AI_API_BASE_URL` should be the provider's complete chat-completions endpoint. For Gemini, use the API origin shown above and the provider's currently available model name. Settings exposes only whether the backend reports a complete configuration; it never displays or stores the key. A signed-in learner must also have **Enable AI Deep Help** on in account settings; the backend enforces that preference as well as authentication and CSRF. The provider credential, billing/access and model selection must be supplied by the deployment owner.
+
+- The browser only ever calls `POST /api/deep-analyze` and `GET /api/ai-usage`. Deep Help is account-gated (signed-in session + CSRF token) and checks the learner's saved account setting; the usage endpoint returns only safe status and quota metadata.
 - The learner clicks **Ask AI for Deeper Help** and confirms a dialog that shows **“AI Deep Help remaining today: X”**.
 - The backend builds a stable hash from the source excerpt, language, execution result, local error fingerprints, explanation level, hint level, requested sections and model.
 - Cache hit → returns `cached: true`, no provider call, **no quota consumed**. The UI says a saved explanation is available and that using it will not consume another request.
@@ -351,6 +362,11 @@ codementor:v1:latest-deep-analysis
 codementor:v1:latest-execution
 ```
 
+Signed-in project source and quiz history use the protected account API rather
+than mirroring into the `projects` and `quiz-history` browser keys. Account API
+failures stay visible instead of falling back to those local/legacy values.
+Playground drafts and transient learning state remain local by design.
+
 No secrets are ever written to storage.
 
 ## 12. Environment file
@@ -359,9 +375,9 @@ Copy `server/.env.example` to `server/.env` and `runner/.env.example` to `runner
 
 Interactive runner defaults: `TERMINAL_RUNNER_URL=ws://127.0.0.1:5101/session`, `RUNNER_HOST=127.0.0.1`, `RUNNER_PORT=5101`, and `E2B_TEMPLATE=codementor-interactive`. The E2B template contains additional toolchains, but only Python, JavaScript, C, C++ and Java are currently exposed in the Playground. Do not expose the runner service publicly without TLS and network access controls. Review E2B's current account limits and pricing before enabling user traffic.
 
-The v2 account columns are optional but recommended when you enable accounts: `DATABASE_URL`, `SESSION_SECRET`, `SESSION_COOKIE_NAME`, `SESSION_TTL_DAYS`, plus `EXECUTION_MAX_FILES`, `EXECUTION_MAX_PROJECT_BYTES` and `EXECUTION_MAX_FILE_BYTES` for multi-file project limits.
+Account features require `DATABASE_URL` (Postgres) and a strong `SESSION_SECRET`; configure `SESSION_COOKIE_NAME` and `SESSION_TTL_DAYS` as needed. `EXECUTION_MAX_FILES`, `EXECUTION_MAX_PROJECT_BYTES` and `EXECUTION_MAX_FILE_BYTES` control multi-file project limits.
 
-> **Vercel + Supabase:** the server now stores data in Postgres (Supabase) instead of SQLite. See [`docs/DEPLOY_VERCEL_SUPABASE.md`](docs/DEPLOY_VERCEL_SUPABASE.md) for the deployment steps; the SQLite-specific notes below predate that change.
+> **Postgres:** account, project, quiz and execution data use the current Postgres schema. See [`docs/DEPLOY_VERCEL_SUPABASE.md`](docs/DEPLOY_VERCEL_SUPABASE.md) for the Supabase deployment option; Railway production uses its existing Postgres service.
 
 ### Production deployment requirements
 
@@ -384,7 +400,7 @@ The root `railway.toml` deploys the React SPA and Express API together as one pu
    - `E2B_API_KEY=<your E2B API key>`
    - `E2B_TEMPLATE=codementor-interactive`
    Railway's `PORT` variable is used automatically. Generate the E2B template with `npm run runner:template` from a trusted local environment configured with the E2B key if it does not already exist in that E2B account.
-6. Add any optional `AI_API_*` values to the CodeMentor service only if AI Deep Help is desired. Judge0-based remote execution is configured by default; its availability and rate limits depend on the external Judge0 service.
+6. If AI Deep Help is desired, add `AI_API_BASE_URL`, `AI_API_KEY` and `AI_MODEL` to the CodeMentor service only. An authorized provider credential/model is external setup; no credentials are committed or exposed to the client. Judge0-based remote execution is configured by default; its availability and rate limits depend on the external Judge0 service.
 7. Deploy both services, wait for their health checks, and verify `https://<your-codementor-domain>/api/health`, account sign-up/login, and an interactive program that reads input. The runner `/health` response reports whether its key is present, but a real E2B run is needed to verify the key and template.
 
 Do not expose the runner service publicly or put `E2B_API_KEY`, database credentials, or either shared secret in client/build variables. Railway service-variable references are case-sensitive and must use the actual names of your database and runner services. Keep a single API instance unless session and quota state are moved to shared storage.
@@ -431,7 +447,7 @@ See [`docs/TESTING.md`](docs/TESTING.md) and [`docs/MANUAL_TEST_CHECKLIST.md`](d
 - Full live E2B validation after configuring the owner's API key and building the hosted template.
 - Vitest + Playwright suites for component and browser-level coverage.
 - Instructor views and shareable, read-only project links.
-- Shared session/cache storage for multi-instance deployments (the SQLite file and in-memory caches are per-process today).
+- Shared session/cache storage for multi-instance deployments (session, AI quota/cache and runner cooldown state are currently per-process).
 
 ## 16. Validation notes (honest status)
 
@@ -446,7 +462,7 @@ misrepresented.
 | `npm test` | Passed — 119 tests: 41 server, 62 client, and 16 runner tests. |
 | `npm run build` | Passed — production client bundle built; Vite reports existing large-chunk size warnings. |
 | `npm run db:generate` | Validates the schema and lists all 8 tables with their columns. |
-| `npm run db:migrate` | Applies the SQLite schema successfully. |
+| `npm run db:migrate` | Applies the Postgres schema when a valid `DATABASE_URL` is available. |
 | `npm run db:seed` | Creates the demo learner, a starter project and quiz history. |
 | `GET /api/execution-capabilities` and `POST /api/run` | Historical provider checks cover backend adapters, including nine compiled-language mappings. These adapters are not equivalent to current learner-facing language availability; see §6. |
 
@@ -480,7 +496,7 @@ misrepresented.
 - Live status streaming for multi-file execution jobs; those records remain separate from the Playground WebSocket terminal.
 - Real cancellation against a provider that supports it (the adapter reports “not supported” honestly).
 - Standalone **CSS** as its own Playground language (CSS is handled inside HTML projects and the multi-file workspace).
-- Tailwind and Prisma/Drizzle were intentionally replaced by a hand-written design system and `node:sqlite`.
+- Tailwind and Prisma/Drizzle were intentionally replaced by a hand-written design system and direct parameterized Postgres queries.
 
 ---
 
