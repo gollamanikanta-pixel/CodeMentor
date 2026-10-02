@@ -365,14 +365,29 @@ The v2 account columns are optional but recommended when you enable accounts: `D
 
 ### Production deployment requirements
 
-The repository has no hosting-specific deployment manifest. Before deploying:
+### Railway deployment
 
-- Use Node.js 22 as pinned in `.mise.toml`. Build with `npm run build` and serve `client/dist` with SPA history fallback.
-- Route same-origin `/api` requests to the Express server and allow WebSocket upgrades for `/api/terminal`; the Vite proxy is only for local development/preview.
-- Set `NODE_ENV=production`, the public HTTPS origin in `CLIENT_ORIGIN`, and a unique high-entropy `SESSION_SECRET`. Keep the E2B API key and runner shared secret in backend/runner-only environment settings.
-- Keep the runner private to the API. For separate containers/services, bind it to the private interface and set `TERMINAL_RUNNER_URL` to its private WebSocket address; never expose the runner directly to the public internet.
-- Use durable storage for `DATABASE_URL`. SQLite, sessions and in-memory quotas/caches are not configured for multi-instance scaling; use one persistent server instance unless those stores are migrated/shared.
-- Verify the E2B template and perform a real run with input/output after deployment. `/health` only confirms the runner process and non-empty configuration, not that the E2B key or template works.
+The root `railway.toml` deploys the React SPA and Express API together as one public service. The API serves the built client (including SPA history routes), and its HTTP server also accepts the `/api/terminal` WebSocket. Interactive execution is a separate, private runner service configured by `runner/railway.toml`.
+
+1. Create a Railway project from this GitHub repository and add a PostgreSQL database. Keep a single backend instance: sessions, quotas and caches currently live in process memory.
+2. Create the public **CodeMentor** service from the repository root. Railway uses the root `railway.toml`; the build compiles both the client and server, and the start command runs the compiled API. Add a public Railway domain to this service.
+3. Add a second service from the same repository for the interactive runner. Set its **Root Directory** to `/runner` so it uses `runner/railway.toml`. Do not generate a public domain for this service; the API reaches it over Railway's private network.
+4. Set the CodeMentor service variables:
+   - `NODE_ENV=production`
+   - `DATABASE_URL=${{Postgres.DATABASE_URL}}` (use the actual Railway PostgreSQL service name in the reference)
+   - `CLIENT_ORIGIN=https://<your-codementor-domain>`
+   - `SESSION_SECRET=<a unique random secret of at least 32 bytes>`
+   - `TERMINAL_RUNNER_URL=ws://${{Runner.RAILWAY_PRIVATE_DOMAIN}}:${{Runner.PORT}}/session` (use the actual runner service name)
+   - `TERMINAL_RUNNER_SECRET=<the same random secret set on the runner>`
+5. Set the runner service variables:
+   - `RUNNER_SHARED_SECRET=<the exact same value as TERMINAL_RUNNER_SECRET>`
+   - `E2B_API_KEY=<your E2B API key>`
+   - `E2B_TEMPLATE=codementor-interactive`
+   Railway's `PORT` variable is used automatically. Generate the E2B template with `npm run runner:template` from a trusted local environment configured with the E2B key if it does not already exist in that E2B account.
+6. Add any optional `AI_API_*` values to the CodeMentor service only if AI Deep Help is desired. Judge0-based remote execution is configured by default; its availability and rate limits depend on the external Judge0 service.
+7. Deploy both services, wait for their health checks, and verify `https://<your-codementor-domain>/api/health`, account sign-up/login, and an interactive program that reads input. The runner `/health` response reports whether its key is present, but a real E2B run is needed to verify the key and template.
+
+Do not expose the runner service publicly or put `E2B_API_KEY`, database credentials, or either shared secret in client/build variables. Railway service-variable references are case-sensitive and must use the actual names of your database and runner services. Keep a single API instance unless session and quota state are moved to shared storage.
 
 ## 13. Testing
 

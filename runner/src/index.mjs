@@ -5,8 +5,8 @@ import { Sandbox } from 'e2b';
 import { WebSocket, WebSocketServer } from 'ws';
 import { errorLineFromOutput } from './diagnostics.mjs';
 
-const host = process.env.RUNNER_HOST || '127.0.0.1';
-const port = Number(process.env.RUNNER_PORT) || 5101;
+const host = process.env.RUNNER_HOST || (process.env.PORT ? '0.0.0.0' : '127.0.0.1');
+const port = Number(process.env.PORT || process.env.RUNNER_PORT) || 5101;
 const secret = process.env.RUNNER_SHARED_SECRET || '';
 const e2bApiKey = process.env.E2B_API_KEY || '';
 const template = process.env.E2B_TEMPLATE || 'codementor-interactive';
