@@ -48,25 +48,26 @@ const SELECT = `SELECT q.id, q.projectId, q.language, q.difficulty, q.score, q.t
   q.conceptsToReview, q.createdAt, p.title AS projectName
   FROM QuizHistory q LEFT JOIN Project p ON p.id = q.projectId`;
 
+export const quizCreateSchema = z.object({
+  project: z.string().trim().min(1).max(120),
+  projectId: z.string().uuid().optional(),
+  language: z.string().min(1).max(40),
+  difficulty: z.string().min(1).max(40),
+  score: z.number().int().min(0).max(1000),
+  total: z.number().int().min(1).max(1000),
+  percentage: z.string().min(1).max(12),
+  conceptsToReview: z.array(z.string().max(80)).max(30).default([]),
+  quizData: z.unknown().optional(),
+  date: z.string().datetime({ offset: true }).optional(),
+});
+
 quizRoutes.get('/', async (req: AuthRequest, res) => {
   const rows = await db.prepare(`${SELECT} WHERE q.userId=? ORDER BY q.createdAt DESC`).all<QuizRow>(req.userId!);
   return res.json({ quizzes: rows.map(toRecord) });
 });
 
 quizRoutes.post('/', async (req: AuthRequest, res) => {
-  const parsed = z
-    .object({
-      project: z.string().trim().min(1).max(120),
-      projectId: z.string().uuid().optional(),
-      language: z.string().min(1).max(40),
-      difficulty: z.string().min(1).max(40),
-      score: z.number().int().min(0).max(1000),
-      total: z.number().int().min(1).max(1000),
-      percentage: z.string().min(1).max(12),
-      conceptsToReview: z.array(z.string().max(80)).max(30).default([]),
-      quizData: z.unknown().optional(),
-    })
-    .safeParse(req.body);
+  const parsed = quizCreateSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ message: 'Invalid quiz record.' });
 
   // If a project is referenced, it must belong to this learner.
@@ -89,7 +90,7 @@ quizRoutes.post('/', async (req: AuthRequest, res) => {
     parsed.data.percentage,
     JSON.stringify(parsed.data.conceptsToReview),
     parsed.data.quizData === undefined ? null : JSON.stringify(parsed.data.quizData),
-    now(),
+    parsed.data.date ?? now(),
   );
 
   const row = await db.prepare(`${SELECT} WHERE q.id=? AND q.userId=?`).get<QuizRow>(id, req.userId!);

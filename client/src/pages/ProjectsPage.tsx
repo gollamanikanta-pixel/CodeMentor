@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, FileCode2, FolderOpen, LayoutGrid, List, Plus, Search, Trash2 } from 'lucide-react';
 import { Button, EmptyState, Pill } from '../components/ui';
+import { LocalDataImport } from '../components/LocalDataImport';
 import { useAuth } from '../auth/AuthContext';
 import {
   createProject,
@@ -246,6 +247,8 @@ export function ProjectsPage() {
           </button>
         </div>
       </div>
+
+      <LocalDataImport onImported={() => void reload()} />
 
       {error ? <p className="ai-error" role="alert">{error} <button onClick={() => void reload()}>Try again</button></p> : null}
       {loading ? <div className="card" role="status">Loading projects…</div> : null}

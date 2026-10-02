@@ -105,6 +105,7 @@ export type ProjectRecord = {
   title: string;
   primaryLanguage: string;
   entryFile: string | null;
+  stdin?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -216,7 +217,7 @@ export async function listProjects(): Promise<ProjectRecord[]> {
   return data.projects;
 }
 
-export function createProject(payload: { title: string; primaryLanguage: string; entryFile?: string }) {
+export function createProject(payload: { title: string; primaryLanguage: string; entryFile?: string; stdin?: string }) {
   return sendJson<{ project: ProjectRecord }>('/api/projects', 'POST', payload);
 }
 
@@ -226,7 +227,7 @@ export async function getProject(projectId: string): Promise<ProjectDetail | nul
   return (await response.json()) as ProjectDetail;
 }
 
-export function updateProject(projectId: string, payload: { title?: string; entryFile?: string; primaryLanguage?: string }) {
+export function updateProject(projectId: string, payload: { title?: string; entryFile?: string; primaryLanguage?: string; stdin?: string }) {
   return sendJson<{ project: ProjectRecord }>(`/api/projects/${projectId}`, 'PUT', payload);
 }
 
@@ -288,6 +289,7 @@ export function createQuiz(payload: {
   total: number;
   percentage: string;
   conceptsToReview: string[];
+  date?: string;
 }) {
   return sendJson<{ quiz: QuizRecord }>('/api/quizzes', 'POST', payload);
 }

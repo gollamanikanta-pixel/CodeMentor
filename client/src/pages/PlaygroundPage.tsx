@@ -114,6 +114,7 @@ export function PlaygroundPage() {
       const projectLanguage = detail.project.primaryLanguage as LanguageName;
       playground.setLanguage(projectLanguage, { loadStarter: !entry });
       if (entry) playground.setCode(entry.content);
+      playground.setStdin(detail.project.stdin ?? '');
       playground.setProjectTitle(detail.project.title);
       setSavedProjectId(detail.project.id);
       setSavedFileId(entry?.id);
@@ -238,7 +239,7 @@ export function PlaygroundPage() {
       let projectId = savedProjectId;
       let fileId = savedFileId;
       if (!projectId) {
-        const created = await createProject({ title, primaryLanguage: language, entryFile: relativePath });
+        const created = await createProject({ title, primaryLanguage: language, entryFile: relativePath, stdin: playground.stdin });
         if (!created.ok) throw new Error(created.data.message || 'Project could not be saved to your account.');
         projectId = created.data.project.id;
         const createdFile = await createProjectFile(projectId, {
@@ -254,7 +255,7 @@ export function PlaygroundPage() {
         }
         fileId = createdFile.data.file.id;
       } else {
-        const updated = await updateProject(projectId, { title, primaryLanguage: language, entryFile: relativePath });
+        const updated = await updateProject(projectId, { title, primaryLanguage: language, entryFile: relativePath, stdin: playground.stdin });
         if (!updated.ok) throw new Error(updated.data.message || 'Project details could not be updated.');
         if (fileId && savedFilePath === relativePath) {
           const updatedFile = await updateProjectFile(projectId, fileId, { content: playground.code, isEntryFile: true });

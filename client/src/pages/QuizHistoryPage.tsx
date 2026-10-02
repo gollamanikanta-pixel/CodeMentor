@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, BarChart3, ListChecks, Search, Target, BookOpen } from 'lucide-react';
 import { Button, EmptyState, Pill, StatCard } from '../components/ui';
+import { LocalDataImport } from '../components/LocalDataImport';
 import { useQuizHistory } from '../hooks/useQuizHistory';
 
 export function QuizHistoryPage() {
@@ -44,6 +45,8 @@ export function QuizHistoryPage() {
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search quiz history" aria-label="Search quiz history" />
         </div>
       </div>
+
+      <LocalDataImport onImported={() => void reload()} />
 
       <div className="history-card card">
         <div className="card-heading">

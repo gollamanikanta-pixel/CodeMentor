@@ -20,7 +20,7 @@ CodeMentor **guides, it never auto-fixes**. It explains errors, highlights likel
 - **Settings** — appearance, editor and learning preferences persist locally and sync to the signed-in account. Playground drafts remain browser-local; saving a project uploads source only on explicit action.
 - **AI Deep Help (optional)** — on-demand backend requests, stable-hash caching, no application-level request cap or cooldown, and an honest unavailable state.
 - **Accounts** — register, log in, log out and recover a password before entering the authenticated workspace. Sessions are opaque httpOnly cookies; every state-changing request is CSRF-checked.
-- **Account-backed projects and quiz history** — source files, projects, settings, quiz history and execution history use owner-scoped protected APIs. If an account request fails, account data is not silently replaced by browser-local data.
+- **Account-backed projects and quiz history** — source files, projects, settings, quiz history and execution history use owner-scoped protected APIs. Signed-in learners can explicitly import legacy browser projects, the current draft (including standard input), and quiz summaries/history dates; the originals remain in browser storage.
 - **Multi-file workspace (v2)** — a file explorer, themed Monaco editor, entry-file selection, ZIP import/export and a sandboxed browser preview for web projects.
 - **Sandboxed web preview (v2)** — HTML/CSS/JS previews run in an `allow-scripts` iframe with external resources blocked and console output streamed back to the learner.
 - **Accessibility** — semantic landmarks, ARIA tabs/dialogs/live regions, visible focus states, 44px+ touch targets, reduced-motion support, and status shown with icons and labels, never colour alone.

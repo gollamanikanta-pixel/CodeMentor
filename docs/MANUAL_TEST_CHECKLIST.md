@@ -130,6 +130,7 @@ row says otherwise.
 - [ ] No `VITE_AI_API_KEY`, `VITE_API_KEY` or `VITE_AI_MODEL` appears in the client bundle or `.env.example`.
 - [ ] `server/.env` is git-ignored; only `.env.example` placeholders exist.
 - [ ] No secret appears in logs, URLs, `localStorage`, screenshots or user-facing errors.
+- [ ] A signed-in learner can explicitly import browser-local projects, draft/stdin and quiz summaries into their account without removing local copies; a partial failure can be retried without duplicating completed items.
 - [ ] Provider routes reject invalid payloads with Zod and return safe messages (no stack traces).
 - [ ] Rate limiters trigger a friendly message.
 - [ ] Corrupted `localStorage` values are discarded rather than breaking the app.

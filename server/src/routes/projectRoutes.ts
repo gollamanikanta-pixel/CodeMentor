@@ -43,13 +43,18 @@ projectRoutes.get('/', async (req: AuthRequest, res) =>
 
 projectRoutes.post('/', async (req: AuthRequest, res) => {
   const parsed = z
-    .object({ title: z.string().trim().min(1).max(120), primaryLanguage: z.string().min(1).max(40), entryFile: z.string().optional() })
+    .object({
+      title: z.string().trim().min(1).max(120),
+      primaryLanguage: z.string().min(1).max(40),
+      entryFile: z.string().optional(),
+      stdin: z.string().max(env.maxStdinBytes).optional(),
+    })
     .safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ message: 'Invalid project details.' });
   const id = crypto.randomUUID();
   const stamp = now();
-  await db.prepare('INSERT INTO Project (id,userId,title,primaryLanguage,entryFile,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?)').run(
-    id, req.userId!, parsed.data.title, parsed.data.primaryLanguage, parsed.data.entryFile || '', stamp, stamp,
+  await db.prepare('INSERT INTO Project (id,userId,title,primaryLanguage,entryFile,stdin,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?)').run(
+    id, req.userId!, parsed.data.title, parsed.data.primaryLanguage, parsed.data.entryFile || '', parsed.data.stdin || '', stamp, stamp,
   );
   return res.status(201).json({ project: await db.prepare('SELECT * FROM Project WHERE id=?').get(id) });
 });
@@ -67,11 +72,16 @@ projectRoutes.put('/:projectId', async (req: AuthRequest, res) => {
   const project = await ownedProject(String(req.params.projectId), req.userId!);
   if (!project) return res.status(404).json({ message: 'Project not found.' });
   const parsed = z
-    .object({ title: z.string().trim().min(1).max(120).optional(), entryFile: z.string().optional(), primaryLanguage: z.string().max(40).optional() })
+    .object({
+      title: z.string().trim().min(1).max(120).optional(),
+      entryFile: z.string().optional(),
+      primaryLanguage: z.string().max(40).optional(),
+      stdin: z.string().max(env.maxStdinBytes).optional(),
+    })
     .safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ message: 'Invalid project update.' });
-  await db.prepare('UPDATE Project SET title=COALESCE(?,title),entryFile=COALESCE(?,entryFile),primaryLanguage=COALESCE(?,primaryLanguage),updatedAt=? WHERE id=? AND userId=?').run(
-    parsed.data.title || null, parsed.data.entryFile ?? null, parsed.data.primaryLanguage || null, now(), project.id, req.userId!,
+  await db.prepare('UPDATE Project SET title=COALESCE(?,title),entryFile=COALESCE(?,entryFile),primaryLanguage=COALESCE(?,primaryLanguage),stdin=COALESCE(?,stdin),updatedAt=? WHERE id=? AND userId=?').run(
+    parsed.data.title || null, parsed.data.entryFile ?? null, parsed.data.primaryLanguage || null, parsed.data.stdin ?? null, now(), project.id, req.userId!,
   );
   return res.json({ project: await ownedProject(String(project.id), req.userId!) });
 });

@@ -9,6 +9,7 @@ export const STORAGE_KEYS = {
   draft: 'codementor:v1:draft',
   projects: 'codementor:v1:projects',
   quizHistory: 'codementor:v1:quiz-history',
+  accountImports: 'codementor:v1:account-imports',
   localAnalysis: 'codementor:v1:latest-local-analysis',
   deepAnalysis: 'codementor:v1:latest-deep-analysis',
   latestExecution: 'codementor:v1:latest-execution',

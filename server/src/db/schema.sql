@@ -56,9 +56,12 @@ CREATE TABLE IF NOT EXISTS Project (
   title TEXT NOT NULL,
   primaryLanguage TEXT NOT NULL,
   entryFile TEXT,
+  stdin TEXT NOT NULL DEFAULT '',
   createdAt TEXT NOT NULL,
   updatedAt TEXT NOT NULL
 );
+
+ALTER TABLE Project ADD COLUMN IF NOT EXISTS stdin TEXT NOT NULL DEFAULT '';
 
 CREATE TABLE IF NOT EXISTS ProjectFile (
   id TEXT PRIMARY KEY,
