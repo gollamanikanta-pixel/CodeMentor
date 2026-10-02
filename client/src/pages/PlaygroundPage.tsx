@@ -55,9 +55,7 @@ export function PlaygroundPage() {
   const canRun = languageAvailable && (config?.executionEnabled ?? false);
   const statusLabel = !languageAvailable
     ? 'Coming soon'
-    : canRun
-      ? 'Hosted interactive runner required'
-      : config?.statusLabel;
+    : config?.statusLabel;
   const statusTone = canRun ? 'amber' : config?.analysisSupported ? 'amber' : 'neutral';
   const markers = useMemo(() => markersFromAnalysis(playground.analysis, playground.execution), [playground.analysis, playground.execution]);
   const revealAnalysis = useCallback(() => {
