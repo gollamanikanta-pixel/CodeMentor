@@ -376,33 +376,16 @@ Interactive runner defaults: `TERMINAL_RUNNER_URL=ws://127.0.0.1:5101/session`, 
 
 Account features require `DATABASE_URL` (Postgres) and a strong `SESSION_SECRET`; configure `SESSION_COOKIE_NAME` and `SESSION_TTL_DAYS` as needed. `EXECUTION_MAX_FILES`, `EXECUTION_MAX_PROJECT_BYTES` and `EXECUTION_MAX_FILE_BYTES` control multi-file project limits.
 
-> **Postgres:** account, project, quiz and execution data use the current Postgres schema. See [`docs/DEPLOY_VERCEL_SUPABASE.md`](docs/DEPLOY_VERCEL_SUPABASE.md) for the Supabase deployment option; Railway production uses its existing Postgres service.
+> **Production deployment:** use Vercel for the app and API and Supabase Postgres for account, project, quiz and execution data. Follow [`docs/DEPLOY_VERCEL_SUPABASE.md`](docs/DEPLOY_VERCEL_SUPABASE.md).
 
-### Production deployment requirements
+### Production deployment: Vercel + Supabase
 
-### Railway deployment
-
-The root `railway.toml` deploys the React SPA and Express API together as one public service. The API serves the built client (including SPA history routes), and its HTTP server also accepts the `/api/terminal` WebSocket. Interactive execution is a separate, private runner service configured by `runner/railway.toml`.
-
-1. Create a Railway project from this GitHub repository and add a PostgreSQL database. Keep a single backend instance: sessions, quotas and caches currently live in process memory.
-2. Create the public **CodeMentor** service from the repository root. Railway uses the root `railway.toml`; the build compiles both the client and server, and the start command runs the compiled API. Add a public Railway domain to this service.
-3. Add a second service from the same repository for the interactive runner. Set its **Root Directory** to `/runner` so it uses `runner/railway.toml`. Do not generate a public domain for this service; the API reaches it over Railway's private network.
-4. Set the CodeMentor service variables:
-   - `NODE_ENV=production`
-   - `DATABASE_URL=${{Postgres.DATABASE_URL}}` (use the actual Railway PostgreSQL service name in the reference)
-   - `CLIENT_ORIGIN=https://<your-codementor-domain>`
-   - `SESSION_SECRET=<a unique random secret of at least 32 bytes>`
-   - `TERMINAL_RUNNER_URL=ws://${{Runner.RAILWAY_PRIVATE_DOMAIN}}:8080/session` (use the actual runner service name and the runner's listening port; this project currently listens on Railway port `8080`)
-   - `TERMINAL_RUNNER_SECRET=<the same random secret set on the runner>`
-5. Set the runner service variables:
-   - `RUNNER_SHARED_SECRET=<the exact same value as TERMINAL_RUNNER_SECRET>`
-   - `E2B_API_KEY=<your E2B API key>`
-   - `E2B_TEMPLATE=codementor-interactive`
-   Railway's `PORT` variable is used automatically. Generate the E2B template with `npm run runner:template` from a trusted local environment configured with the E2B key if it does not already exist in that E2B account.
-6. If AI Deep Help is desired, add `AI_API_BASE_URL`, `AI_API_KEY` and `AI_MODEL` to the CodeMentor service only. An authorized provider credential/model is external setup; no credentials are committed or exposed to the client. Judge0-based remote execution is configured by default; its availability and rate limits depend on the external Judge0 service.
-7. Deploy both services, wait for their health checks, and verify `https://<your-codementor-domain>/api/health`, account sign-up/login, and an interactive program that reads input. The runner `/health` response reports whether its key is present, but a real E2B run is needed to verify the key and template.
-
-Do not expose the runner service publicly or put `E2B_API_KEY`, database credentials, or either shared secret in client/build variables. Railway service-variable references are case-sensitive and must use the actual names of your database and runner services. Keep a single API instance unless session and quota state are moved to shared storage.
+This repository's production target is Vercel for the frontend and API and
+Supabase Postgres for account-backed data. Follow the full setup and
+verification steps in [`docs/DEPLOY_VERCEL_SUPABASE.md`](docs/DEPLOY_VERCEL_SUPABASE.md).
+Vercel serverless functions do not support the long-lived WebSocket connection
+required by the interactive terminal; browser execution and the normal
+single-request secure-run endpoints remain separate.
 
 ## 13. Testing
 

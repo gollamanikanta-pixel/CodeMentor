@@ -118,11 +118,69 @@ export function parseProviderResponse(data: unknown, gemini: boolean): Record<st
   return shapeResponse(JSON.parse(cleaned) as Record<string, unknown>);
 }
 
-async function callProvider(userContent: string, repair = false): Promise<Record<string, unknown>> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), env.aiTimeoutMs);
+type ProviderRequestFailureKind = 'configuration' | 'timeout' | 'network' | 'http';
+
+export class ProviderRequestError extends Error {
+  constructor(
+    readonly kind: ProviderRequestFailureKind,
+    readonly status?: number,
+  ) {
+    super('AI provider request failed.');
+    this.name = 'ProviderRequestError';
+  }
+}
+
+export class ProviderOutputError extends Error {
+  constructor() {
+    super('AI provider response was not usable.');
+    this.name = 'ProviderOutputError';
+  }
+}
+
+type ProviderCall = (
+  userContent: string,
+  repair: boolean,
+  timeoutMs: number,
+) => Promise<Record<string, unknown>>;
+
+/** Retry only malformed successful responses, within one total time budget. */
+export async function callWithOutputRepair(
+  userContent: string,
+  providerCall: ProviderCall,
+  timeoutMs: number,
+): Promise<Record<string, unknown>> {
+  const deadline = Date.now() + timeoutMs;
   try {
-    const providerUrl = new URL(env.aiBaseUrl);
+    return await providerCall(userContent, false, timeoutMs);
+  } catch (error) {
+    if (!(error instanceof ProviderOutputError)) throw error;
+  }
+
+  const remainingMs = deadline - Date.now();
+  if (remainingMs <= 0) throw new ProviderRequestError('timeout');
+
+  try {
+    return await providerCall(userContent, true, remainingMs);
+  } catch (error) {
+    if (error instanceof ProviderOutputError) throw new ProviderOutputError();
+    throw error;
+  }
+}
+
+async function callProvider(
+  userContent: string,
+  repair = false,
+  timeoutMs = env.aiTimeoutMs,
+): Promise<Record<string, unknown>> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    let providerUrl: URL;
+    try {
+      providerUrl = new URL(env.aiBaseUrl);
+    } catch {
+      throw new ProviderRequestError('configuration');
+    }
     const isGemini = providerUrl.hostname === 'generativelanguage.googleapis.com';
     const requestContent = repair
       ? `Your previous reply did not match the required response shape. Reply with exactly one JSON object containing every required key and non-empty summary and deeperExplanation strings. Do not use markdown.\n${userContent}`
@@ -155,8 +213,27 @@ async function callProvider(userContent: string, repair = false): Promise<Record
           }),
           signal: controller.signal,
         });
-    if (!response.ok) throw new Error('provider-status');
-    return parseProviderResponse(await response.json(), isGemini);
+    if (!response.ok) throw new ProviderRequestError('http', response.status);
+
+    let data: unknown;
+    try {
+      data = await response.json();
+    } catch {
+      throw new ProviderOutputError();
+    }
+    try {
+      return parseProviderResponse(data, isGemini);
+    } catch {
+      throw new ProviderOutputError();
+    }
+  } catch (error) {
+    if (error instanceof ProviderRequestError || error instanceof ProviderOutputError) {
+      throw error;
+    }
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new ProviderRequestError('timeout');
+    }
+    throw new ProviderRequestError('network');
   } finally {
     clearTimeout(timer);
   }
@@ -175,14 +252,32 @@ export async function deepAnalyze(input: DeepAnalyzeInput) {
   const userContent = buildUserContext(input);
   let safe: Record<string, unknown>;
   try {
-    safe = await callProvider(userContent);
-  } catch {
-    try {
-      // At most one structured JSON repair retry.
-      safe = await callProvider(userContent, true);
-    } catch {
-      throw new Error('The AI provider did not return usable guidance. Local guidance remains available.');
+    // Leave room for the handler to return before Vercel's 30-second limit.
+    const timeoutMs = process.env.VERCEL ? Math.min(env.aiTimeoutMs, 25_000) : env.aiTimeoutMs;
+    safe = await callWithOutputRepair(userContent, callProvider, timeoutMs);
+  } catch (error) {
+    if (error instanceof ProviderRequestError) {
+      console.error('safe-ai-provider-request-failed', {
+        kind: error.kind,
+        ...(error.status === undefined ? {} : { status: error.status }),
+      });
+      if (error.kind === 'http' && error.status === 429) {
+        throw new Error('The AI provider is rate-limited. Please try again shortly. Local guidance remains available.');
+      }
+      if (error.kind === 'timeout') {
+        throw new Error('The AI provider timed out. Please try again. Local guidance remains available.');
+      }
+      if (error.kind === 'configuration') {
+        throw new Error('The AI provider configuration is invalid. Please contact the site administrator.');
+      }
+      throw new Error('The AI provider could not be reached. Please try again shortly. Local guidance remains available.');
     }
+    if (error instanceof ProviderOutputError) {
+      console.error('safe-ai-provider-output-unusable');
+      throw new Error('The AI provider did not return usable guidance. Please try again. Local guidance remains available.');
+    }
+    console.error('safe-ai-provider-unexpected-failure');
+    throw new Error('AI Deep Help is temporarily unavailable. Local guidance remains available.');
   }
 
   cache.set(key, safe, env.aiCacheTtlSeconds * 1000);

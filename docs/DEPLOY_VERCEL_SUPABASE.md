@@ -1,60 +1,125 @@
 # Deploying CodeMentor on Vercel + Supabase
 
+This is the production deployment path for this repository:
+
 | Piece | Where it runs |
 | --- | --- |
 | React app (`client/`) | Vercel static hosting |
-| Express API (`server/`) | One Vercel serverless function, mounted at `/api` |
-| Database | Supabase Postgres (schema in `server/src/db/schema.sql`) |
-| Interactive console (E2B runner + `/api/terminal` WebSocket) | **Not on Vercel** - see "Limits" |
+| Express API (`server/`) | Vercel serverless function at `/api` |
+| Account, project, settings, quiz and execution data | Supabase Postgres |
+| AI Deep Help | Optional provider called only by the server |
+| Interactive terminal over WebSockets | Not supported by Vercel functions |
 
-`npm run vercel-build` (see `scripts/vercel-build.mjs`) builds the client, bundles the
-API into a single function, and writes the Vercel Build Output (`.vercel/output`).
-`vercel.json` points the build at it.
+No Railway service is required for the Vercel + Supabase deployment. The
+interactive terminal needs a long-running WebSocket-capable host and therefore
+remains unavailable on this deployment. Regular local browser runs and
+single-request Judge0 execution are separate features.
 
-## 1. Supabase
+## 1. Connect the GitHub repository to Vercel
 
-The schema is already applied as the `codementor_initial_schema` migration (8 tables, row-level
-security enabled with no policies, so the public Supabase API reads nothing). To re-apply it:
-`DATABASE_URL=... npm run db:migrate` (idempotent).
+1. In the Vercel project at
+   [codementor.ai](https://vercel.com/manikanta13/codementor.ai), confirm the
+   connected repository is `gollamanikanta-pixel/CodeMentor`.
+2. Set the project root to the repository root. Do not set it to `client/`,
+   `server/` or `runner/`.
+3. Keep the framework preset as **Other**. The root `vercel.json` runs
+   `npm run vercel-build`, which creates the static frontend and `/api`
+   serverless function.
+4. Set the Node.js runtime to 22 if the project setting offers a runtime
+   selection.
+5. Use `codementor.ai` as the production domain after its DNS verification is
+   complete. The Vercel project’s assigned `*.vercel.app` domain can be used
+   for the initial smoke test.
 
-Use the **Transaction pooler** connection string (Project -> Connect), which is the one that suits
-serverless:
+The frontend and API share one origin on Vercel. Do not set a `VITE_*` provider
+key or a separate API URL: the client calls `/api/...` on the same domain.
 
-    postgresql://postgres.<project-ref>:<DB-PASSWORD>@aws-<n>-<region>.pooler.supabase.com:6543/postgres
+## 2. Prepare the Supabase database
 
-URL-encode special characters in the password. The server enables TLS automatically for
-non-localhost hosts.
+The project uses Supabase as PostgreSQL; it does not use Supabase Auth or expose
+the Supabase REST API to the browser. CodeMentor's own account/session API
+stores password hashes and opaque session-token hashes in Postgres.
 
-## 2. Vercel
+1. Open the Supabase project and select **SQL Editor**.
+2. Create a new query, paste the contents of
+   [`../server/src/db/schema.sql`](../server/src/db/schema.sql), and run it.
+   The script is idempotent and creates the tables, indexes and restrictive
+   row-level-security settings used by the server.
+3. Select **Project Settings → Database → Connect** and copy the **Transaction
+   pooler** URI (port `6543`). URL-encode any special characters in its
+   password. Do not use a browser/public/anon key as `DATABASE_URL`.
+4. Keep that URI private. It is a server-side Vercel environment variable only.
 
-Import the GitHub repo. Leave the framework preset as **Other** (`vercel.json` already sets
-install/build commands). Add these environment variables (Production + Preview):
+The same schema can be applied from a trusted local checkout instead of SQL
+Editor by setting `DATABASE_URL` in `server/.env` and running
+`npm run db:migrate --prefix server`. Never put a production database URI into
+the frontend environment or commit it to Git.
 
-| Variable | Value |
-| --- | --- |
-| `DATABASE_URL` | the Supabase transaction-pooler string |
-| `SESSION_SECRET` | a long random string (`openssl rand -hex 32`) |
-| `CLIENT_ORIGIN` | your public URL, e.g. `https://codementor.vercel.app` (no trailing slash) |
-| `EXECUTION_PROVIDER` | `judge0` |
-| `EXECUTION_API_BASE_URL` | `https://ce.judge0.com` |
-| `AI_API_BASE_URL`, `AI_API_KEY`, `AI_MODEL` | optional - only for AI Deep Help |
+## 3. Configure Vercel environment variables
 
-`NODE_ENV=production` is set by Vercel. Never put real secrets in a `VITE_*` variable.
+Add these under **Project → Settings → Environment Variables** for **Production**.
+Use the same settings for Preview only if you intentionally want live account
+and AI behavior in preview deployments.
 
-## 3. Verify
+| Variable | Required | Value |
+| --- | --- | --- |
+| `DATABASE_URL` | Yes | Supabase Transaction pooler URI (port `6543`) |
+| `DATABASE_POOL_MAX` | Recommended | `3` |
+| `SESSION_SECRET` | Yes | A unique random secret with at least 32 random bytes |
+| `SESSION_COOKIE_NAME` | Recommended | `codementor_session` |
+| `SESSION_TTL_DAYS` | Recommended | `7` |
+| `CLIENT_ORIGIN` | Recommended | `https://codementor.ai` (include any other exact production domain as a comma-separated origin) |
+| `EXECUTION_PROVIDER` | Recommended | `judge0` |
+| `EXECUTION_API_BASE_URL` | Recommended | `https://ce.judge0.com` |
+| `AI_API_BASE_URL` | Optional | Provider endpoint; Gemini uses `https://generativelanguage.googleapis.com` |
+| `AI_API_KEY` | Optional | Provider credential, server-side only |
+| `AI_MODEL` | Optional | A model available to that provider account |
+| `AI_API_TIMEOUT_MS` | Recommended | `25000` to leave response time within Vercel's function limit |
 
-1. `https://<your-app>/api/health` returns `{"ok":true,...}`.
-2. Register an account, create a project, reload - it persists (rows appear in Supabase).
-3. Multi-file workspace -> run a C/C++/Java project (uses Judge0).
+Set AI values together or leave all three empty. The deployed `/api/ai-usage`
+response reports only whether the set is complete. If the provider values are
+currently configured only on another host, copy them into Vercel’s server-side
+environment settings; they are not inherited automatically.
 
-## Limits on Vercel
+Never prefix a secret with `VITE_`. Vite variables are compiled into client
+assets and are public. Redeploy after changing environment variables.
 
-* **Interactive Run Code console**: Vercel functions cannot hold WebSockets, so `/api/terminal`
-  does not work there and the console shows "could not be reached". Everything else works
-  (editor, local analysis, visuals, quizzes, accounts, projects, multi-file runs via Judge0).
-  To enable it, run `server/src/index.ts` and `runner/` on a host with long-lived processes
-  (Railway, Fly.io, a VPS) and point the browser's `/api` at that origin.
-* **In-memory limits**: secure-execution quotas/cooldowns and the AI response cache live in each
-  function instance's memory, so they are best-effort on serverless (they reset on cold start and
-  are per instance). AI Deep Help has no application-level cap or cooldown; provider quotas still apply.
-* `npm run db:seed` creates a public demo account and refuses to run when `NODE_ENV=production`.
+The frontend and `/api` function use the same origin, so there is no need for a
+separate Railway API or `VITE_API_URL`. `CLIENT_ORIGIN` remains an exact-origin
+CORS allowlist for any browser request that is cross-origin.
+
+## 4. Deploy and verify
+
+After the Supabase schema and Vercel variables are in place, trigger a Vercel
+deployment from the connected GitHub branch. Check:
+
+1. `https://codementor.ai/api/health` returns
+   `{"ok":true,"service":"codementor-server"}`.
+2. `https://codementor.ai/api/ai-usage` returns `{"configured":true}` only when
+   all three AI provider variables are present. `false` means AI variables are
+   missing; it does not mean the frontend is broken.
+3. Register a test account, sign out/in, create a project and reload it.
+4. Confirm the account, project, project-file and related rows exist in
+   Supabase. Do not use real learner code for deployment smoke tests.
+5. Turn on **Enable AI Deep Help** in the signed-in account settings, then test
+   it with a small, non-sensitive code example.
+
+If Deep Help fails, check the Vercel function logs for the safe diagnostic
+labels `safe-ai-provider-request-failed` or
+`safe-ai-provider-output-unusable`. The first distinguishes provider HTTP
+status, timeout, configuration and network failure without logging credentials
+or response bodies. Verify the model name and provider quota in the provider
+dashboard.
+
+## Vercel platform limits
+
+- Vercel serverless functions cannot accept the long-lived WebSocket upgrade
+  needed by `/api/terminal`; interactive terminal runs will not work on this
+  deployment. The app continues to support browser-based execution, and the
+  single-request Judge0 paths are independent of that terminal.
+- In-memory AI result cache and runner quota/cooldown counters are per function
+  instance and may reset on cold starts. They are best-effort and not shared
+  across instances.
+- If the custom domain is not resolving, first verify its domain assignment and
+  DNS status in the Vercel project. The assigned Vercel preview domain is
+  available for checking the build before custom-domain DNS propagates.
