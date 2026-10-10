@@ -122,15 +122,14 @@ export function AiHelpDialog({
         ) : (
           <div className="ai-status">
             <strong>AI Deep Help is ready.</strong>
-            <span className="muted">Available on demand. Gemini account quotas and billing still apply.</span>
+            <span className="muted">No CodeMentor request cap or cooldown. Your AI provider's availability, quotas, and billing still apply.</span>
           </div>
         )}
 
         {!result ? (
           <>
             <p>
-              Ask for deeper guidance on this version of your code? Your local analysis is already ready;
-              AI adds a deeper, teacher-style explanation only when you ask.
+              Ask for deeper guidance on this version of your code?               AI adds a deeper, teacher-style explanation to this code and any available local analysis only when you ask.
             </p>
             <ul className="ai-rules">
               <li>Explains what happened, why, and the concept to review.</li>

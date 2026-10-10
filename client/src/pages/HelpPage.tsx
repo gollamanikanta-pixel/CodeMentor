@@ -78,7 +78,7 @@ const SECTIONS: Array<{ icon: typeof BookOpen; title: string; body: ReactNode }>
       <p>
         AI is optional, backend-only and never called automatically. It only runs when you click <strong>Ask AI for Deeper Help</strong>
         and confirm. Cached results for the same code version are reused. CodeMentor does not impose a daily request cap or cooldown;
-        Gemini account quotas and billing still apply, and local guidance always remains available.
+        your AI provider's availability, quotas and billing still apply, and local guidance always remains available.
       </p>
     ),
   },
@@ -116,7 +116,7 @@ const FAQS = [
   ],
   [
     'When would AI Deep Help be useful?',
-    'When the local explanation is not quite enough. It is optional, uses fair-use limits, and cached explanations for the same code version do not consume a request.',
+    'When the local explanation is not quite enough. It is optional, has no CodeMentor-imposed request cap or cooldown, and cached explanations for the same code version are reused. Your AI provider’s quotas and billing still apply.',
   ],
 ];
 

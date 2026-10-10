@@ -29,6 +29,7 @@ test('deepAnalyzeSchema bounds the AI context and sections', () => {
     sections: ['overview', 'errors'],
     explanationLevel: 'Beginner',
     hintLevel: 'Guided',
+    localAnalysis: null,
   });
   assert.ok(ok.success);
   assert.ok(!deepAnalyzeSchema.safeParse({ language: 'Python', source: ''.padEnd(12001, 'x') }).success);

@@ -52,7 +52,7 @@ export type DeepAnalyzeInput = {
   source: string;
   language: string;
   execution?: Record<string, unknown> | null;
-  localAnalysis?: Record<string, unknown>;
+  localAnalysis?: Record<string, unknown> | null;
   explanationLevel?: string;
   hintLevel?: string;
   sections?: string[];

@@ -7,7 +7,7 @@ export const deepAnalyzeSchema = z.object({
   source: z.string().min(1).max(12000),
   language: z.string().min(1).max(32),
   execution: z.record(z.string(), z.unknown()).nullable().optional(),
-  localAnalysis: z.record(z.string(), z.unknown()).optional(),
+  localAnalysis: z.record(z.string(), z.unknown()).nullable().optional(),
   explanationLevel: z.enum(['Beginner', 'Intermediate', 'Advanced']).optional(),
   hintLevel: z.enum(['Gentle', 'Guided', 'Learning']).optional(),
   sections: z.array(z.enum(DEEP_HELP_SECTIONS)).max(DEEP_HELP_SECTIONS.length).optional(),
