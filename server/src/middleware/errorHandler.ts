@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from 'express';
+import { safeDatabaseTarget } from '../db/database.js';
 
 function safeErrorCodes(error: unknown): string[] {
   const codes: string[] = [];
@@ -29,7 +30,12 @@ function safeErrorCodes(error: unknown): string[] {
 export function errorHandler(error: unknown, _req: Request, res: Response, _next: NextFunction) {
   const label = error instanceof Error ? error.name : 'UnknownError';
   const codes = safeErrorCodes(error);
-  console.error('safe-api-error', { name: label, ...(codes.length ? { codes } : {}) });
+  const isDatabaseError = codes.some((code) => /^[A-Z0-9]{5}$/.test(code));
+  console.error('safe-api-error', {
+    name: label,
+    ...(codes.length ? { codes } : {}),
+    ...(isDatabaseError ? { databaseTarget: safeDatabaseTarget() } : {}),
+  });
   res.status(500).json({ message: 'The request could not be completed safely.' });
 }
 

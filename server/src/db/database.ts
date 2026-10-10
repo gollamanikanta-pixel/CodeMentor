@@ -46,6 +46,19 @@ function toPg(sql: string): string {
 
 const local = /localhost|127\.0\.0\.1/.test(env.databaseUrl);
 
+/** Connection target metadata safe to include in server-only diagnostics. */
+export function safeDatabaseTarget(): { host: string; username: string } {
+  try {
+    const url = new URL(env.databaseUrl);
+    return {
+      host: url.hostname,
+      username: decodeURIComponent(url.username).slice(0, 100),
+    };
+  } catch {
+    return { host: 'invalid-database-url', username: '' };
+  }
+}
+
 export const pool = new pg.Pool({
   connectionString: env.databaseUrl,
   // Serverless functions each open their own pool; keep it tiny and let the
