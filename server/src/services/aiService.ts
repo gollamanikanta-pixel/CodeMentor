@@ -112,6 +112,19 @@ function responseText(data: unknown, gemini: boolean): string {
   return text.trim();
 }
 
+export function isGeminiOpenAiCompatible(url: URL): boolean {
+  return (
+    url.hostname === 'generativelanguage.googleapis.com' &&
+    url.pathname.replace(/\/+$/, '') === '/v1beta/openai'
+  );
+}
+
+export function geminiOpenAiEndpoint(url: URL): string {
+  const endpoint = new URL(url);
+  endpoint.pathname = `${url.pathname.replace(/\/+$/, '')}/chat/completions`;
+  return endpoint.toString();
+}
+
 export function parseProviderResponse(data: unknown, gemini: boolean): Record<string, unknown> {
   const content = responseText(data, gemini);
   const cleaned = content.replace(/^```json\s*/i, '').replace(/```\s*$/i, '');
@@ -181,7 +194,8 @@ async function callProvider(
     } catch {
       throw new ProviderRequestError('configuration');
     }
-    const isGemini = providerUrl.hostname === 'generativelanguage.googleapis.com';
+    const isGeminiOpenAi = isGeminiOpenAiCompatible(providerUrl);
+    const isGemini = providerUrl.hostname === 'generativelanguage.googleapis.com' && !isGeminiOpenAi;
     const requestContent = repair
       ? `Your previous reply did not match the required response shape. Reply with exactly one JSON object containing every required key and non-empty summary and deeperExplanation strings. Do not use markdown.\n${userContent}`
       : userContent;
@@ -199,7 +213,7 @@ async function callProvider(
             signal: controller.signal,
           },
         )
-      : await fetch(env.aiBaseUrl, {
+      : await fetch(isGeminiOpenAi ? geminiOpenAiEndpoint(providerUrl) : env.aiBaseUrl, {
           method: 'POST',
           headers: { 'content-type': 'application/json', authorization: `Bearer ${env.aiKey}` },
           body: JSON.stringify({

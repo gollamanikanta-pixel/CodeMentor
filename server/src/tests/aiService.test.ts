@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   callWithOutputRepair,
+  geminiOpenAiEndpoint,
+  isGeminiOpenAiCompatible,
   parseProviderResponse,
   ProviderOutputError,
   ProviderRequestError,
@@ -66,6 +68,20 @@ test('parseProviderResponse reads OpenAI-compatible JSON responses', () => {
   );
   assert.equal(response.summary, validGuidance.summary);
   assert.equal(response.deeperExplanation, validGuidance.deeperExplanation);
+});
+
+test('Gemini OpenAI-compatible URLs use the chat completions endpoint', () => {
+  const baseUrl = new URL('https://generativelanguage.googleapis.com/v1beta/openai/');
+
+  assert.equal(isGeminiOpenAiCompatible(baseUrl), true);
+  assert.equal(
+    geminiOpenAiEndpoint(baseUrl),
+    'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+  );
+  assert.equal(
+    isGeminiOpenAiCompatible(new URL('https://generativelanguage.googleapis.com')),
+    false,
+  );
 });
 
 test('provider request failures are not retried as JSON repairs', async () => {
