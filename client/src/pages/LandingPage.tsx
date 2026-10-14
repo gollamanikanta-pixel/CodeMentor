@@ -19,12 +19,13 @@ import { useAuth } from '../auth/AuthContext';
 import { useTheme } from '../settings/SettingsContext';
 import {
   comingSoonLanguageNames,
-  interactiveRunnerLanguages,
+  localRunnerLanguages,
   previewLanguages,
+  sourceOnlyLanguages,
 } from '../data/languages';
 
 const FEATURES = [
-  { icon: Play, tone: 'indigo', title: 'Run supported code', text: 'Run programs in isolated containers and respond to input live.' },
+  { icon: Play, tone: 'indigo', title: 'Run supported code', text: 'Run Python and JavaScript locally in your browser, with standard input.' },
   { icon: Lightbulb, tone: 'amber', title: 'Learn line by line', text: 'Turn confusing errors into calm, actionable learning moments.' },
   { icon: GitBranch, tone: 'cyan', title: 'Visualize your logic', text: 'See the shape of loops, functions and decisions as you learn.' },
   { icon: ListChecks, tone: 'violet', title: 'Practice with quizzes', text: 'Generate thoughtful questions from your own code and concepts.' },
@@ -114,7 +115,8 @@ export function LandingPage() {
         <div className="section-kicker">HONEST ABOUT WHAT RUNS</div>
         <h2>Six supported languages. More are coming soon.</h2>
         <div className="language-grid">
-          <LanguageCard title="Hosted Interactive Runner" tone="indigo" icon={ShieldCheck} items={interactiveRunnerLanguages} note="Uses E2B cloud sandboxes; source code is sent to that service when you run." />
+          <LanguageCard title="Local browser runners" tone="indigo" icon={ShieldCheck} items={localRunnerLanguages} note="Runs in browser workers; no remote code execution service." />
+          <LanguageCard title="Single-file source only" tone="amber" icon={Code2} items={sourceOnlyLanguages} note="C, C++ and Java can be written and saved here; multi-file execution may use a configured provider." />
           <LanguageCard title="Sandboxed Browser Preview" tone="green" icon={Code2} items={previewLanguages} note="Preview HTML safely in your browser. External resources are blocked." />
           <LanguageCard title="Coming soon" tone="amber" icon={AlertCircle} items={comingSoonLanguageNames} note="These languages will become available in a future release." />
         </div>

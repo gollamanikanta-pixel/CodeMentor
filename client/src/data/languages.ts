@@ -8,6 +8,7 @@ export type ExecutionMode =
   | 'browser_transpile_planned'
   | 'sql_sandbox_planned'
   | 'secure_remote'
+  | 'unavailable'
   | 'coming_soon';
 
 export type LanguageKey =
@@ -42,6 +43,8 @@ export type LanguageConfig = {
 
 const SECURE_MESSAGE =
   'The hosted interactive runner is not configured. Follow the E2B runner setup instructions in README.md.';
+const SOURCE_ONLY_MESSAGE =
+  'The single-file Playground does not run this language on Vercel. You can still write and save it; multi-file execution may use a configured remote provider.';
 
 /**
  * The exact capability statement required in the Help centre, secure-runner
@@ -103,9 +106,9 @@ export const languageConfigs: LanguageConfig[] = [
     displayName: 'Python',
     extensions: ['.py'],
     monacoLanguage: 'python',
-    executionMode: 'interactive_hosted',
-    statusLabel: 'Hosted interactive runner',
-    statusDescription: 'Runs in an isolated hosted sandbox through the configured E2B runner.',
+    executionMode: 'browser_python',
+    statusLabel: 'Local browser runner',
+    statusDescription: 'Runs locally in a dedicated browser worker using Pyodide.',
     executionEnabled: true,
     analysisSupported: true,
     starter:
@@ -116,9 +119,9 @@ export const languageConfigs: LanguageConfig[] = [
     displayName: 'JavaScript',
     extensions: ['.js', '.mjs'],
     monacoLanguage: 'javascript',
-    executionMode: 'interactive_hosted',
-    statusLabel: 'Hosted interactive runner',
-    statusDescription: 'Runs in an isolated hosted sandbox through the configured E2B runner.',
+    executionMode: 'browser_javascript',
+    statusLabel: 'Local browser runner',
+    statusDescription: 'Runs locally in a dedicated browser worker.',
     executionEnabled: true,
     analysisSupported: true,
     starter:
@@ -168,18 +171,20 @@ export const languageConfigs: LanguageConfig[] = [
       'SELECT concept, AVG(score) AS average_score\nFROM quiz_attempts\nGROUP BY concept\nORDER BY average_score DESC;',
   },
   ...(['c', 'cpp', 'java', 'csharp', 'go', 'php', 'ruby', 'rust', 'kotlin'] as LanguageKey[]).map(
-    (key): LanguageConfig => ({
-      key,
-      ...SECURE_META[key],
-      executionMode: 'interactive_hosted',
-      statusLabel: 'Hosted interactive runner',
-      statusDescription: SECURE_MESSAGE,
-      // The interactive runner executes source in an isolated hosted sandbox.
-      executionEnabled: true,
-      analysisSupported: false,
-      providerLanguage: key,
-      starter: SECURE_STARTERS[key],
-    }),
+    (key): LanguageConfig => {
+      const sourceOnly = key === 'c' || key === 'cpp' || key === 'java';
+      return {
+        key,
+        ...SECURE_META[key],
+        executionMode: sourceOnly ? 'unavailable' : 'interactive_hosted',
+        statusLabel: sourceOnly ? 'Source only on Vercel' : 'Hosted interactive runner',
+        statusDescription: sourceOnly ? SOURCE_ONLY_MESSAGE : SECURE_MESSAGE,
+        executionEnabled: !sourceOnly,
+        analysisSupported: false,
+        providerLanguage: key,
+        starter: SECURE_STARTERS[key],
+      };
+    },
   ),
 ];
 
@@ -211,13 +216,11 @@ export const analyzableLanguages: AnalyzableLanguage[] = languageConfigs
   .filter((item) => item.analysisSupported)
   .map((item) => item.displayName as AnalyzableLanguage);
 
-export const interactiveRunnerLanguages: LanguageName[] = [
+export const localRunnerLanguages: LanguageName[] = [
   'Python',
   'JavaScript',
-  'C',
-  'C++',
-  'Java',
 ];
+export const sourceOnlyLanguages: LanguageName[] = ['C', 'C++', 'Java'];
 export const multiFileExecutionLanguages: LanguageName[] = ['C', 'C++', 'Java'];
 export const previewLanguages = ['HTML'];
 export const plannedAnalysisLanguages = ['TypeScript', 'SQL'];
@@ -236,7 +239,7 @@ export function isRunnable(language: LanguageName): language is 'Python' | 'Java
 }
 
 export function isInteractiveRunnable(language: LanguageName): boolean {
-  return isLanguageAvailable(language) && getLanguage(language)?.executionMode === 'interactive_hosted';
+  return isLanguageAvailable(language) && (language === 'Python' || language === 'JavaScript');
 }
 
 /** HTML renders in the sandboxed preview rather than a code worker. */

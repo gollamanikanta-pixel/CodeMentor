@@ -315,7 +315,7 @@ export function PlaygroundPage() {
         </div>
         <div className="project-meta">
           <span>
-            <ShieldCheck size={14} aria-hidden="true" /> Code is sent to your configured runner when run
+            <ShieldCheck size={14} aria-hidden="true" /> Python and JavaScript run in your browser; save a project to sync it to your account
           </span>
         </div>
       </div>
@@ -493,7 +493,7 @@ export function PlaygroundPage() {
           {!languageAvailable
             ? `${language} is coming soon. Choose one of the available languages to run and learn from code. `
             : canRun
-            ? 'Live interactive execution uses the configured E2B isolated cloud runner. Source code is sent to that service; internet access is disabled in the sandbox. '
+            ? `${language} runs in a local browser worker, not a remote execution service. Your code can make its own network requests.${language === 'Python' ? ' Python downloads its runtime from jsDelivr.' : ''} `
             : `${config?.statusDescription} `}
           Use Local Guidance First. Local analysis does not send source to an AI service.
         </span>

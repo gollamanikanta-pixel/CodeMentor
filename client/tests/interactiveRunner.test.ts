@@ -3,21 +3,32 @@ import { test } from 'node:test';
 import {
   availableLanguageNames,
   comingSoonLanguageNames,
-  interactiveRunnerLanguages,
+  localRunnerLanguages,
   isInteractiveRunnable,
   languageOptionLabel,
   languageByDisplayName,
   multiFileExecutionLanguages,
+  sourceOnlyLanguages,
 } from '../src/data/languages';
 import { normalizeSettings } from '../src/settings/defaults';
 
-test('every advertised executable console language uses the hosted interactive runner', () => {
-  assert.deepEqual(interactiveRunnerLanguages, ['Python', 'JavaScript', 'C', 'C++', 'Java']);
-  for (const language of interactiveRunnerLanguages) {
+test('Python and JavaScript use local browser runners', () => {
+  assert.deepEqual(localRunnerLanguages, ['Python', 'JavaScript']);
+  for (const language of localRunnerLanguages) {
     const config = languageByDisplayName[language];
-    assert.equal(config.executionMode, 'interactive_hosted', `${language} should use the interactive runner`);
+    assert.equal(config.executionMode, language === 'Python' ? 'browser_python' : 'browser_javascript');
     assert.equal(config.executionEnabled, true, `${language} should be enabled`);
     assert.equal(isInteractiveRunnable(language), true);
+  }
+});
+
+test('C, C++, and Java are source-only in the single-file Playground', () => {
+  for (const language of sourceOnlyLanguages) {
+    const config = languageByDisplayName[language];
+    assert.equal(config.executionMode, 'unavailable');
+    assert.equal(config.executionEnabled, false);
+    assert.equal(isInteractiveRunnable(language), false);
+    assert.match(config.statusDescription, /does not run this language on Vercel/);
   }
 });
 

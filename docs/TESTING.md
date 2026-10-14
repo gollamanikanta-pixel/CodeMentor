@@ -25,7 +25,7 @@ npm run db:generate # validate Postgres schema
 | `client/tests/sandboxPreview.test.ts` | Sandbox document building for well-formed and head-less documents, CSS/JS inlining, external-resource stripping, unsafe-path and missing-entry rejection, and `injectIntoHead` fallbacks for every document shape. |
 | `client/tests/visualDetails.test.ts` | Per-program diagram labels (loop variable, function name) differ between programs, structural analysis covers every compiled language, and a C compile error becomes a learning error with no fix. |
 | `client/tests/programFlow.test.ts` | The control-flow parser reads real statements (skipping imports/directives), owns loop/branch bodies, inlines `main`, and renders *distinct* Mermaid flows per program (loops draw a back-edge, branches draw a labelled diamond) with no injected markup. |
-| `client/tests/interactiveRunner.test.ts` | Available languages and coming-soon options stay in sync; coming-soon languages cannot be used as interactive runners or defaults. |
+| `client/tests/interactiveRunner.test.ts` | Python/JavaScript use local browser runners; single-file C/C++/Java remain source-only; available and coming-soon language options stay in sync. |
 | `runner/src/*.test.mjs` | Runner health/configuration, authenticated WebSocket protocol handling, input/output handling and source-line diagnostics. |
 | `server/src/utils/hash.test.ts` | `stableStringify` key-order independence, deterministic `stableHash`, hash sensitivity to source changes, `truncate` behaviour. |
 | `server/src/tests/auth.test.ts` | The v2 schema declares every account/sync table, embeds no process-execution primitive, stores a password hash (never a plain password column), and the live connection exposes the applied tables. |

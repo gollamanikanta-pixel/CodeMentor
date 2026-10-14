@@ -11,7 +11,7 @@ CodeMentor **guides, it never auto-fixes**. It explains errors, highlights likel
 ## 1. Features
 
 - **Playground workspace** — collapsible sidebar, Monaco editor, analysis panel, bottom console, and a sticky action toolbar.
-- **Interactive console runner** — Python, JavaScript, C, C++ and Java run in E2B cloud sandboxes with outbound internet disabled. HTML uses a sandboxed browser preview. Click **Run Code** to jump to the live console, type input when prompted and press Enter; output streams back while it runs. When a diagnostic identifies a source line, CodeMentor highlights it and provides a jump-to-line action. TypeScript, SQL, C#, Go, PHP, Ruby, Rust and Kotlin are marked **Coming soon** and are not selectable or runnable in the learner interface.
+- **Local console runners** — Python and JavaScript run in browser workers; CodeMentor does not send their source to a remote execution service. Add stdin in **Program Input** before running. Python downloads Pyodide from jsDelivr, and learner programs may make their own network requests. HTML uses a sandboxed browser preview. C, C++ and Java are source-only in the single-file Playground; multi-file execution may use a configured remote provider.
 - **Local analysis** — rule-based guidance runs locally without AI, network access or code rewriting. Analyzer code for coming-soon languages remains internal and is not exposed as a supported language choice.
 - **Errors & Learning Hints** — category badge, likely line with confidence, technical message, what happened, why, progressive hints, concept reminder, self-check question and debugging steps.
 - **Local visuals** — accessible SVG data-structure diagrams plus safe Mermaid flowcharts generated from detected structure.
@@ -123,7 +123,7 @@ codementor/
 ### Data flow
 
 1. The learner edits code in the browser. Autosave writes a local draft only — no run, no AI, and no account project is changed until explicit save.
-2. **Run Code** opens an authenticated WebSocket to the interactive runner. Source is sent only after the learner starts a run; the runner launches a fresh E2B sandbox with outbound internet disabled, streams output, and accepts live stdin until completion or cancellation.
+2. **Run Code** sends Python or JavaScript to a dedicated browser worker. Program execution stays in the browser; Python downloads its Pyodide runtime from jsDelivr. Stdin is supplied in **Program Input**. The local runner enforces a 50 KB source limit, a 10 KB input limit, a 45-second runtime bootstrap limit and a 3-second execution limit.
 3. The local analyzer runs **in the browser** and produces the `LocalAnalysis` object (summary, concepts, line explanations, errors, hints, tips, diagram, quiz readiness).
 4. The UI renders Analysis, Visuals and Quiz from that object.
 5. **Ask AI for Deeper Help** is the only automatic-free path to the backend. The browser POSTs one combined context; the backend hashes it, serves a cache hit for free, or calls the provider once.
@@ -154,9 +154,9 @@ npm run db:generate
 npm run db:migrate
 npm run db:seed
 
-# 4. Set the same private random value as TERMINAL_RUNNER_SECRET in
-#    server/.env and RUNNER_SHARED_SECRET in runner/.env.
-#    Add E2B_API_KEY to runner/.env, then build the hosted toolchain template.
+# 4. Optional legacy hosted terminal only: set matching private runner
+#    secrets and E2B_API_KEY, then build its toolchain template.
+#    Browser-local Python/JavaScript runs do not need this service.
 npm run runner:template
 
 # 5. Start all services
@@ -167,7 +167,7 @@ Dependencies are hoisted to the workspace-root `node_modules`, so one
 `npm install` covers the client, the server and the root tooling; `npm run
 install:all` performs the same install explicitly.
 
-Open <http://localhost:5173>. Interactive runs require an E2B account/API key, the built E2B language template, and matching private runner secrets. Local analysis does not require a runner or E2B key.
+Open <http://localhost:5173>. Python and JavaScript Playground runs work in the browser and do not require the E2B runner or its API key. Account-backed features still need the API and database; E2B is only for the optional legacy terminal service.
 
 Prefer separate terminals?
 
@@ -203,7 +203,8 @@ One file, `client/src/data/languages.ts`, is the single source of truth. Each en
 
 | Group | Languages | Execution | Local analysis |
 | --- | --- | --- | --- |
-| Available console languages | Python, JavaScript, C, C++, Java | Yes — authenticated live WebSocket to an isolated sandbox with outbound internet disabled | Yes where applicable |
+| Available console languages | Python, JavaScript | Yes — local browser workers; stdin is supplied before the run | Yes |
+| Single-file source only | C, C++, Java | Not run in the Playground; multi-file execution may use a configured provider | Structural guidance |
 | Sandboxed preview | HTML | Yes — isolated iframe (Run Preview) | Yes |
 | Coming soon | TypeScript, SQL, C#, Go, PHP, Ruby, Rust, Kotlin | Not selectable or runnable in the learner interface | Not advertised |
 
@@ -211,15 +212,15 @@ The provider adapters retain additional language mappings for backend and future
 
 Coming-soon source files are not accepted by the single-file Playground upload. Multi-file projects may retain source files, but their coming-soon languages cannot be run.
 
-## 7. Previous browser runner implementation
+## 7. Local browser runners
 
-The older Python/Pyodide and JavaScript Web Worker adapters remain in the source tree for non-interactive use and their existing unit coverage. The Playground Run Code action uses the live E2B PTY runner for all executable console languages so it can pause for input. JavaScript programs can call `input('Enter a number: ')`; other languages use their usual standard-input APIs.
+Python and JavaScript run in dedicated Web Workers and do not use the hosted terminal service. Supply input in the Playground's **Program Input** panel before running. Python loads a pinned Pyodide runtime from jsDelivr on first use; later runs reuse it for that page session. Source and input are not uploaded by the runner, but learner programs can access browser network APIs, so do not put secrets in code.
 
 ## 8. Secure remote execution for multi-file projects
 
 > CodeMentor runs most supported console and multi-file learning projects in isolated environments. Some projects may be limited by compiler versions, security, runtime, memory, package, network, or platform requirements.
 
-The Playground interactive runner is a separate Node service and executes source only inside E2B's isolated cloud sandboxes. It creates each sandbox with outbound internet disabled, uses a PTY to stream output and input, and kills the sandbox after each run. The Express API authenticates the learner session and proxies terminal messages; it does not compile or run learner programs itself. Learner code and interactive input are sent to E2B. The existing Judge0/Piston adapters below are used by multi-file project execution, not the Playground's live console.
+The legacy interactive terminal is a separate Node service and uses E2B cloud sandboxes. The current single-file Playground does not call that WebSocket service. The Judge0/Piston adapters described below remain for configured multi-file project execution; learner source for those runs is sent to the selected remote provider.
 
 ### Judge0 CE (keyless) adapter — default
 
@@ -344,8 +345,9 @@ AI is never called while typing, on page load, on tab switching, on theme/settin
 - The multi-file web preview runs in an `allow-scripts` iframe with external resources blocked, so preview code never shares the app's origin.
 - Safe error responses — no stack traces, no secret logging. Errors are logged by short label only.
 - Secrets live only in ignored environment files; `.env.example` files ship placeholders.
-- Interactive runs require a signed-in session, same-origin WebSocket and CSRF validation. The API proxies to the runner using a private shared secret; the runner launches isolated E2B sandboxes without outbound internet and enforces output and time limits.
-- Browser worker timeouts; code and input size limits; safe Mermaid; defensive `localStorage` handling.
+- Browser-local Python/JavaScript runs use worker termination, code and input size limits and runtime timeouts; Python fetches its runtime from jsDelivr. Learner code can make its own network requests.
+- The optional legacy hosted terminal requires a signed-in session, same-origin WebSocket and CSRF validation; the API proxies to its E2B runner using a private shared secret.
+- Safe Mermaid; defensive `localStorage` handling.
 - A React error boundary wraps the whole app.
 - Do not enter passwords, personal information, tokens, database credentials or API keys into learning code.
 
@@ -370,9 +372,9 @@ No secrets are ever written to storage.
 
 ## 12. Environment file
 
-Copy `server/.env.example` to `server/.env` and `runner/.env.example` to `runner/.env`. Create an E2B account/key and store it as `E2B_API_KEY` only in `runner/.env`. Set one private random secret as `TERMINAL_RUNNER_SECRET` in `server/.env` and `RUNNER_SHARED_SECRET` in `runner/.env`. Build the cloud toolchain template with `npm run runner:template`; this uses E2B's cloud builder and does not require local Docker. Then start all three development services with `npm run dev`. The runner listens only on localhost by default. Learner source and interactive input are sent to E2B through this service.
+Copy `server/.env.example` to `server/.env` for the API. The separate E2B runner configuration below is optional legacy setup; browser-local Python and JavaScript Playground runs do not need an E2B account, API key or runner service. If you explicitly exercise the legacy hosted terminal, configure its E2B key and shared secrets in the server and runner environments, build its template with `npm run runner:template`, then start all three services with `npm run dev`. The runner listens only on localhost by default, and source/input sent to that service are sent to E2B.
 
-Interactive runner defaults: `TERMINAL_RUNNER_URL=ws://127.0.0.1:5101/session`, `RUNNER_HOST=127.0.0.1`, `RUNNER_PORT=5101`, and `E2B_TEMPLATE=codementor-interactive`. The E2B template contains additional toolchains, but only Python, JavaScript, C, C++ and Java are currently exposed in the Playground. Do not expose the runner service publicly without TLS and network access controls. Review E2B's current account limits and pricing before enabling user traffic.
+Legacy interactive runner defaults: `TERMINAL_RUNNER_URL=ws://127.0.0.1:5101/session`, `RUNNER_HOST=127.0.0.1`, `RUNNER_PORT=5101`, and `E2B_TEMPLATE=codementor-interactive`. The single-file Playground does not use this service. Do not expose the runner publicly without TLS and network access controls. Review E2B's current account limits and pricing before enabling user traffic.
 
 Account features require `DATABASE_URL` (Postgres) and a strong `SESSION_SECRET`; configure `SESSION_COOKIE_NAME` and `SESSION_TTL_DAYS` as needed. `EXECUTION_MAX_FILES`, `EXECUTION_MAX_PROJECT_BYTES` and `EXECUTION_MAX_FILE_BYTES` control multi-file project limits.
 
@@ -384,8 +386,9 @@ This repository's production target is Vercel for the frontend and API and
 Supabase Postgres for account-backed data. Follow the full setup and
 verification steps in [`docs/DEPLOY_VERCEL_SUPABASE.md`](docs/DEPLOY_VERCEL_SUPABASE.md).
 Vercel serverless functions do not support the long-lived WebSocket connection
-required by the interactive terminal; browser execution and the normal
-single-request secure-run endpoints remain separate.
+used by the legacy interactive terminal. Python and JavaScript now run in
+browser workers without that service; single-request secure-run endpoints for
+multi-file projects remain separate.
 
 ## 13. Testing
 
@@ -402,12 +405,10 @@ See [`docs/TESTING.md`](docs/TESTING.md) and [`docs/MANUAL_TEST_CHECKLIST.md`](d
 
 | Symptom | Fix |
 | --- | --- |
-| Hosted runner says `E2B_API_KEY` is missing | Add your E2B key to `runner/.env` only, then restart the runner service. |
-| E2B reports that the language template is missing | Run `npm run runner:template` after setting `E2B_API_KEY` in `runner/.env`. |
-| Interactive runner cannot be reached | Check that `server/.env` has `TERMINAL_RUNNER_URL` and the matching shared secret is configured in both server and runner environments. |
-| Program runs but no input control appears | The input control appears after the console says the program is running; confirm your code reads from stdin. |
+| Python is still preparing the local runtime | Check the connection to jsDelivr; Pyodide is downloaded from its CDN on first use. |
+| Program input is not received | Add one input value per line under **Program Input** before starting the run. |
 | “AI Deep Help is not configured” | Expected without AI keys. All local features still work. |
-| “Secure execution is not configured…” in multi-file workspace | Configure the optional `EXECUTION_*` provider settings; Playground live runs use the separate E2B runner. |
+| “Secure execution is not configured…” in multi-file workspace | Configure the optional `EXECUTION_*` provider settings; single-file Python/JavaScript runs do not use that provider. |
 | Port already in use | `npm run dev --prefix client -- --port 5174` |
 | PowerShell blocks npm | `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` |
 
@@ -415,8 +416,8 @@ See [`docs/TESTING.md`](docs/TESTING.md) and [`docs/MANUAL_TEST_CHECKLIST.md`](d
 
 **Known limitations**
 
-- The legacy Python/Pyodide adapter loads from a CDN; a production deployment should pin or self-host the asset.
-- Interactive E2B runs are for small learning programs, not long-running work; E2B plan limits and charges may apply.
+- Python loads its pinned Pyodide runtime from jsDelivr on first use; the learner's program can access browser network APIs.
+- The optional legacy E2B terminal is not used by the single-file Playground; E2B plan limits and charges may apply if that service is explicitly enabled elsewhere.
 - Monaco loads from a CDN in development; production builds should bundle or self-host it.
 - The default Judge0 CE runner is a **public** service with a fair-use rate limit (roughly one request per second). CodeMentor's shared cooldown keeps normal learning under it; heavy or classroom use should host a private Judge0/Piston instance. Judge0 CE compiles a single source file per run, so multi-file projects execute their entry file.
 - Remote execution providers and AI providers are interfaces plus honest fallbacks until configured.
@@ -426,7 +427,7 @@ See [`docs/TESTING.md`](docs/TESTING.md) and [`docs/MANUAL_TEST_CHECKLIST.md`](d
 
 - Verified safe TypeScript transpilation and execution.
 - A sandboxed, credential-free SQL practice engine.
-- Full live E2B validation after configuring the owner's API key and building the hosted template.
+- Optional legacy E2B terminal validation after configuring an API key and building its hosted template.
 - Vitest + Playwright suites for component and browser-level coverage.
 - Instructor views and shareable, read-only project links.
 - Shared session/cache storage for multi-instance deployments (session, AI response cache and runner cooldown state are currently per-process).
@@ -458,7 +459,7 @@ misrepresented.
 - Settings API: `GET`/`PUT /api/settings` round-trip, and signing in adopts the account's saved theme (verified: server `light` applied on login).
 - Cancel endpoint answers honestly (`Execution job not found.` for an unknown id).
 - **Spec-parity audit (before the interactive-runner change):** historical browser checks covered the prior execution flow. The current interactive flow authenticates the signed-in session, Origin and CSRF token; the API proxies to a separately authenticated runner.
-- **Previous browser-worker audit (before replacing the Playground Run Code flow):** learner-written Python/JavaScript success, stdin, errors and timeouts, plus the sandboxed HTML preview, were verified in a real browser. This does not validate the current E2B interactive path.
+- **Current single-file runner validation:** Python and JavaScript use browser workers; automated client tests and the production build pass. Confirm first-use Pyodide loading from jsDelivr in the target browser.
 
 **Previous remote-provider verification (multi-file execution)**
 
@@ -467,11 +468,11 @@ misrepresented.
 - Learning signal: a missing semicolon in C returned `status: "compilation_error"` with the compiler output and `errorLine: 2` — a real hint, never a fix.
 - HTML: the sandboxed preview renders the starter in an iframe with the blocked-external-resources notice.
 
-**Interactive E2B-runner verification**
+**Legacy E2B-runner verification (historical; not used by the single-file Playground)**
 
 - Runner startup/health, rejection of an invalid shared secret, the WebSocket protocol error response, and honest missing-E2B-credential behavior are covered by automated smoke tests.
 - In this validation, the local API and runner `/health` endpoints both returned HTTP 200; the runner reported `configured: true`. The E2B key and matching server/runner shared-secret settings are present locally; their values were not printed.
-- The health response confirms non-empty configuration only. This validation did not create an E2B sandbox or verify that the remote key and configured template can execute. Confirm the live E2B prompt → input → output flow before production traffic; prior browser/provider checks are historical and are not a substitute for a deployment smoke test.
+- The health response confirms non-empty configuration only. This validation did not create an E2B sandbox or verify that the remote key and configured template can execute.
 
 **Still not implemented (tracked in `docs/PROJECT_SPEC.md`)**
 
