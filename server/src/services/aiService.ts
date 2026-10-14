@@ -150,6 +150,28 @@ export class ProviderOutputError extends Error {
   }
 }
 
+export function providerFailureMessage(error: ProviderRequestError): string {
+  if (error.kind === 'http' && (error.status === 401 || error.status === 403)) {
+    return `The AI provider denied access (HTTP ${error.status}). Check the API key, model access, and provider-side key restrictions. Local guidance remains available.`;
+  }
+  if (error.kind === 'http' && (error.status === 400 || error.status === 404)) {
+    return `The AI provider rejected the configured model or endpoint (HTTP ${error.status}). Check AI_MODEL and AI_API_BASE_URL. Local guidance remains available.`;
+  }
+  if (error.kind === 'http' && error.status === 429) {
+    return 'The AI provider is rate-limited. Please try again shortly. Local guidance remains available.';
+  }
+  if (error.kind === 'timeout') {
+    return 'The AI provider timed out. Please try again. Local guidance remains available.';
+  }
+  if (error.kind === 'configuration') {
+    return 'The AI provider configuration is invalid. Please contact the site administrator.';
+  }
+  if (error.kind === 'http' && error.status !== undefined && error.status >= 500) {
+    return `The AI provider is temporarily unavailable (HTTP ${error.status}). Please try again shortly. Local guidance remains available.`;
+  }
+  return 'The AI provider could not be reached. Please try again shortly. Local guidance remains available.';
+}
+
 type ProviderCall = (
   userContent: string,
   repair: boolean,
@@ -275,16 +297,7 @@ export async function deepAnalyze(input: DeepAnalyzeInput) {
         kind: error.kind,
         ...(error.status === undefined ? {} : { status: error.status }),
       });
-      if (error.kind === 'http' && error.status === 429) {
-        throw new Error('The AI provider is rate-limited. Please try again shortly. Local guidance remains available.');
-      }
-      if (error.kind === 'timeout') {
-        throw new Error('The AI provider timed out. Please try again. Local guidance remains available.');
-      }
-      if (error.kind === 'configuration') {
-        throw new Error('The AI provider configuration is invalid. Please contact the site administrator.');
-      }
-      throw new Error('The AI provider could not be reached. Please try again shortly. Local guidance remains available.');
+      throw new Error(providerFailureMessage(error));
     }
     if (error instanceof ProviderOutputError) {
       console.error('safe-ai-provider-output-unusable');

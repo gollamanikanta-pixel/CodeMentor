@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AlertCircle, Check, Copy, Maximize2, Minimize2, Send, Square, Terminal, Trash2 } from 'lucide-react';
+import { getLanguage } from '../../data/languages';
 import type { ExecutionResult, LanguageName } from '../../types';
 import { IconButton } from '../../components/ui';
 import { useToast } from '../../hooks/useToast';
@@ -46,6 +47,7 @@ export function ConsolePanel({
   }, [running]);
 
   const visibleExecution = cleared ? null : execution;
+  const runningExecutionMode = getLanguage(language).executionMode;
   const errorLine = visibleExecution?.errorLine;
   const visibleTerminalOutput = cleared ? '' : terminalOutput;
   const errorCount = visibleExecution && visibleExecution.status !== 'success' ? 1 : 0;
@@ -156,7 +158,7 @@ export function ConsolePanel({
         {tab === 'Output' ? (
           running ? (
             <>
-              <span className="console-prompt">$ {language.toLowerCase()} · e2b</span>
+              <span className="console-prompt">$ {language.toLowerCase()} · {runningExecutionMode}</span>
               {visibleTerminalOutput ? <pre className="console-pre terminal-output">{visibleTerminalOutput}</pre> : null}
               {runtimeMessage ? <span>{runtimeMessage}</span> : null}
               {terminalError ? <span className="console-error"><AlertCircle size={14} /> {terminalError}</span> : null}
