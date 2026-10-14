@@ -42,7 +42,7 @@ export type LanguageConfig = {
 };
 
 const SECURE_MESSAGE =
-  'The hosted interactive runner is not configured. Follow the E2B runner setup instructions in README.md.';
+  'This hosted runner is not available for this language yet.';
 const SECURE_REMOTE_MESSAGE =
   'Runs in the configured isolated execution service when it reports this language ready. Source code and input are sent only after you choose Run Code.';
 

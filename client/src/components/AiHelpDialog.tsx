@@ -121,8 +121,8 @@ export function AiHelpDialog({
           </div>
         ) : (
           <div className="ai-status">
-            <strong>AI Deep Help is ready.</strong>
-            <span className="muted">No CodeMentor request cap or cooldown. Your AI provider's availability, quotas, and billing still apply.</span>
+            <strong>AI Deep Help is configured.</strong>
+            <span className="muted">Provider access is checked when you ask. Provider availability, access, quotas, and billing still apply.</span>
           </div>
         )}
 

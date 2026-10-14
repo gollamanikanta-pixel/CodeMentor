@@ -5,6 +5,7 @@ import {
   geminiOpenAiEndpoint,
   isGeminiOpenAiCompatible,
   parseProviderResponse,
+  providerFailureMessage,
   ProviderOutputError,
   ProviderRequestError,
   shapeResponse,
@@ -100,6 +101,21 @@ test('provider request failures are not retried as JSON repairs', async () => {
     (caught) => caught === error,
   );
   assert.equal(calls, 1);
+});
+
+test('provider access failures tell the learner what to check without exposing credentials', () => {
+  const message = providerFailureMessage(new ProviderRequestError('http', 403));
+
+  assert.match(message, /denied access \(HTTP 403\)/);
+  assert.match(message, /API key, model access, and provider-side key restrictions/);
+  assert.doesNotMatch(message, /token|secret|authorization/i);
+});
+
+test('provider request failures distinguish invalid model and endpoint configuration', () => {
+  const message = providerFailureMessage(new ProviderRequestError('http', 404));
+
+  assert.match(message, /configured model or endpoint \(HTTP 404\)/);
+  assert.match(message, /AI_MODEL and AI_API_BASE_URL/);
 });
 
 test('malformed provider output gets at most one repair attempt', async () => {
