@@ -8,7 +8,7 @@ import {
   languageOptionLabel,
   languageByDisplayName,
   multiFileExecutionLanguages,
-  sourceOnlyLanguages,
+  secureRemoteLanguages,
 } from '../src/data/languages';
 import { normalizeSettings } from '../src/settings/defaults';
 
@@ -22,13 +22,14 @@ test('Python and JavaScript use local browser runners', () => {
   }
 });
 
-test('C, C++, and Java are source-only in the single-file Playground', () => {
-  for (const language of sourceOnlyLanguages) {
+test('C, C++, and Java use the secure remote runner in the single-file Playground', () => {
+  for (const language of secureRemoteLanguages) {
     const config = languageByDisplayName[language];
-    assert.equal(config.executionMode, 'unavailable');
+    assert.equal(config.executionMode, 'secure_remote');
     assert.equal(config.executionEnabled, false);
     assert.equal(isInteractiveRunnable(language), false);
-    assert.match(config.statusDescription, /does not run this language on Vercel/);
+    assert.match(config.statusDescription, /Source code and input are sent only after you choose Run Code/);
+    assert.equal(config.providerLanguage, language === 'C++' ? 'cpp' : language.toLowerCase());
   }
 });
 

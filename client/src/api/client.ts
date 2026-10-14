@@ -5,7 +5,11 @@ import type { DeepAnalysis, ExecutionResult, LanguageName, LocalAnalysis, QuizRe
  * No AI or execution keys ever reach this module.
  */
 
-async function postJson<T>(path: string, payload: unknown): Promise<{ ok: boolean; data: T & { message?: string } }> {
+async function postJson<T>(
+  path: string,
+  payload: unknown,
+  signal?: AbortSignal,
+): Promise<{ ok: boolean; data: T & { message?: string } }> {
   // Provider-backed POSTs are account-gated, so they must carry the session
   // cookie and echo the CSRF token like every other state-changing request.
   const token = readCsrfCookie() || (await fetchCsrfToken().catch(() => ''));
@@ -14,6 +18,7 @@ async function postJson<T>(path: string, payload: unknown): Promise<{ ok: boolea
     credentials: 'include',
     headers: { 'content-type': 'application/json', ...(token ? { 'x-csrf-token': token } : {}) },
     body: JSON.stringify(payload),
+    signal,
   });
   let data: Record<string, unknown> = {};
   try {
@@ -38,8 +43,8 @@ export function requestDeepHelp(payload: DeepHelpPayload) {
   return postJson<DeepAnalysis>('/api/deep-analyze', payload);
 }
 
-export function requestSecureRun(payload: { source: string; stdin: string; language: string }) {
-  return postJson<ExecutionResult>('/api/run', payload);
+export function requestSecureRun(payload: { source: string; stdin: string; language: string }, signal?: AbortSignal) {
+  return postJson<ExecutionResult>('/api/run', payload, signal);
 }
 
 export async function getAiUsage() {

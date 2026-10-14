@@ -17,11 +17,14 @@ type WorkerMessage = Partial<Omit<ExecutionResult, 'status'>> & {
 };
 
 function createWorker(language: RunnableLanguage): Worker {
-  const url =
-    language === 'Python'
-      ? new URL('../workers/pythonRunner.worker.ts', import.meta.url)
-      : new URL('../workers/javascriptRunner.worker.ts', import.meta.url);
-  return new Worker(url, { type: 'module' });
+  if (language === 'Python') {
+    return new Worker(new URL('../workers/pythonRunner.worker.ts', import.meta.url), {
+      type: 'module',
+    });
+  }
+  return new Worker(new URL('../workers/javascriptRunner.worker.ts', import.meta.url), {
+    type: 'module',
+  });
 }
 
 /**

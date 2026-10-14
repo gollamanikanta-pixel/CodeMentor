@@ -11,7 +11,7 @@ CodeMentor **guides, it never auto-fixes**. It explains errors, highlights likel
 ## 1. Features
 
 - **Playground workspace** — collapsible sidebar, Monaco editor, analysis panel, bottom console, and a sticky action toolbar.
-- **Local console runners** — Python and JavaScript run in browser workers; CodeMentor does not send their source to a remote execution service. Add stdin in **Program Input** before running. Python downloads Pyodide from jsDelivr, and learner programs may make their own network requests. HTML uses a sandboxed browser preview. C, C++ and Java are source-only in the single-file Playground; multi-file execution may use a configured remote provider.
+- **Console runners** — Python and JavaScript run in browser workers; CodeMentor does not send their source to a remote execution service. C, C++ and Java run through the configured isolated execution service when each language is reported ready. Their source and stdin are sent only after the learner chooses **Run Code**. Python downloads Pyodide from jsDelivr, and learner programs may make their own network requests. HTML uses a sandboxed browser preview.
 - **Local analysis** — rule-based guidance runs locally without AI, network access or code rewriting. Analyzer code for coming-soon languages remains internal and is not exposed as a supported language choice.
 - **Errors & Learning Hints** — category badge, likely line with confidence, technical message, what happened, why, progressive hints, concept reminder, self-check question and debugging steps.
 - **Local visuals** — accessible SVG data-structure diagrams plus safe Mermaid flowcharts generated from detected structure.
@@ -203,8 +203,8 @@ One file, `client/src/data/languages.ts`, is the single source of truth. Each en
 
 | Group | Languages | Execution | Local analysis |
 | --- | --- | --- | --- |
-| Available console languages | Python, JavaScript | Yes — local browser workers; stdin is supplied before the run | Yes |
-| Single-file source only | C, C++, Java | Not run in the Playground; multi-file execution may use a configured provider | Structural guidance |
+| Available local console languages | Python, JavaScript | Yes — local browser workers; stdin is supplied before the run | Yes |
+| Available secure remote console languages | C, C++, Java | Yes when the configured isolated runner reports the language ready; source and stdin are sent only after Run Code | Structural guidance |
 | Sandboxed preview | HTML | Yes — isolated iframe (Run Preview) | Yes |
 | Coming soon | TypeScript, SQL, C#, Go, PHP, Ruby, Rust, Kotlin | Not selectable or runnable in the learner interface | Not advertised |
 
@@ -216,15 +216,15 @@ Coming-soon source files are not accepted by the single-file Playground upload. 
 
 Python and JavaScript run in dedicated Web Workers and do not use the hosted terminal service. Supply input in the Playground's **Program Input** panel before running. Python loads a pinned Pyodide runtime from jsDelivr on first use; later runs reuse it for that page session. Source and input are not uploaded by the runner, but learner programs can access browser network APIs, so do not put secrets in code.
 
-## 8. Secure remote execution for multi-file projects
+## 8. Secure remote execution
 
 > CodeMentor runs most supported console and multi-file learning projects in isolated environments. Some projects may be limited by compiler versions, security, runtime, memory, package, network, or platform requirements.
 
-The legacy interactive terminal is a separate Node service and uses E2B cloud sandboxes. The current single-file Playground does not call that WebSocket service. The Judge0/Piston adapters described below remain for configured multi-file project execution; learner source for those runs is sent to the selected remote provider.
+The legacy interactive terminal is a separate Node service and uses E2B cloud sandboxes. The Playground does not call that WebSocket service: Python and JavaScript run locally, while C/C++/Java use the authenticated secure-run API when the readiness check passes. Source for secure runs is sent to the selected remote provider only after the learner chooses **Run Code**.
 
 ### Judge0 CE (keyless) adapter — default
 
-`EXECUTION_PROVIDER=judge0` selects a built-in adapter for [Judge0 CE](https://ce.judge0.com), a keyless, open-source remote runner. The backend retains mappings for nine compiled languages for future/provider compatibility; the current learner interface exposes only C, C++ and Java through multi-file execution. The adapter:
+`EXECUTION_PROVIDER=judge0` selects a built-in adapter for [Judge0 CE](https://ce.judge0.com), a keyless, open-source remote runner. The backend retains mappings for nine compiled languages for future/provider compatibility; the current learner interface exposes C, C++ and Java through the single-file Playground and multi-file execution. The adapter:
 
 - calls `POST /submissions?base64_encoded=false&wait=true` with `{ source_code, language_id, stdin }`;
 - maps all nine languages to verified Judge0 CE ids — `c → 103`, `cpp → 105`, `java → 91`, `csharp → 51`, `go → 107`, `php → 98`, `ruby → 72`, `rust → 108`, `kotlin → 111`;
@@ -235,7 +235,7 @@ The legacy interactive terminal is a separate Node service and uses E2B cloud sa
 
 > **Historical provider verification:** C, C++, Java, C#, Go, PHP, Ruby, Rust and Kotlin returned `status: "success"` with exact program output in earlier provider checks; a deliberately broken C program returned `status: "compilation_error"` with `errorLine: 2`. These backend checks do not mean every mapped language is currently exposed in the learner interface.
 
-When configured, `GET /api/execution-capabilities` can report provider readiness for the backend's mapped languages after a real submission probe. This API status does not expand the learner-facing language menu.
+When configured, `GET /api/execution-capabilities` reports provider readiness for the backend's mapped languages after a real submission probe. The single-file Run button for C, C++ and Java is enabled only when the service reports that language ready; this status does not expand the learner-facing language menu.
 
 ### Piston (keyless) adapter — alternative, with automatic fallback
 
@@ -267,7 +267,7 @@ EXECUTION_API_BASE_URL=http://localhost:2000/api/v2
 EXECUTION_API_KEY=
 ```
 
-Then restart the API. `/api/execution-capabilities` reports provider readiness with detected runtime versions; the current learner interface only exposes C/C++/Java through multi-file execution.
+Then restart the API. `/api/execution-capabilities` reports provider readiness with detected runtime versions; the learner interface exposes C/C++/Java through the single-file Playground and multi-file execution when ready.
 
 The exact capability statement above is also shown in the in-app Help centre.
 
