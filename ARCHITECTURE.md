@@ -37,8 +37,9 @@ carries `correctedCode`, `fixedCode`, `correctedLine`, `applyFix`, `patch` or
 ## Local guidance and account data flow
 
 1. The learner types in Monaco. Autosave writes a local draft — no run, no AI.
-2. **Run Code** connects to the authenticated interactive runner; HTML preview
-   stays in a sandboxed browser iframe.
+2. **Run Code** executes Python and JavaScript in local browser workers with
+   pre-supplied stdin; HTML preview stays in a sandboxed browser iframe. Python
+   downloads Pyodide from jsDelivr, and learner code can make network requests.
 3. The local analyzer runs in the browser and produces a `LocalAnalysis`.
 4. Analysis, visuals and quiz questions are generated locally. On completion,
    a signed-in learner's quiz result is saved through the protected API.

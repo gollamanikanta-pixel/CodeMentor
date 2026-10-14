@@ -225,12 +225,16 @@ export function ConsolePanel({
             </span>
             <span>
               Source:{' '}
+              {visibleExecution?.executionMode === 'browser_python' || visibleExecution?.executionMode === 'browser_javascript'
+                ? 'local browser worker; not sent to a remote execution service'
+                : visibleExecution?.executionMode === 'interactive_hosted'
+                  ? 'isolated E2B cloud sandbox; source is sent to the configured runner service'
+                  : visibleExecution?.executionMode === 'secure_remote'
+                    ? 'configured secure runner'
+                    : 'local browser worker'}
               {visibleExecution?.executionMode === 'interactive_hosted'
-                ? 'isolated E2B cloud sandbox; source is sent to the configured runner service'
-                : visibleExecution?.executionMode === 'secure_remote'
-                  ? 'configured secure runner'
-                  : 'local browser worker'}{' '}
-              · Interactive runner limits: 200 KB output · 60s
+                ? ' · Interactive runner limits: 200 KB output · 60s'
+                : null}
             </span>
             {typeof visibleExecution?.exitCode === 'number' ? <span>Exit code: {visibleExecution.exitCode}</span> : null}
             {typeof visibleExecution?.memory === 'number' && visibleExecution.memory > 0 ? (

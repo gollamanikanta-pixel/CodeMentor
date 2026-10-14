@@ -109,9 +109,11 @@ row says otherwise.
 
 ## 12. Available runners
 
-- [ ] With the terminal runner unconfigured, the five available console languages do not show fabricated output; the Playground explains that the hosted interactive runner is unavailable.
-- [ ] With the E2B runner configured, Python, JavaScript, C, C++ and Java starters run and stream actual output.
-- [ ] Live stdin prompts accept input and continue output for each available language that requests it.
+- [ ] Python and JavaScript run in browser workers without a hosted execution service.
+- [ ] Python loads Pyodide from jsDelivr on first use and reports a clear error if runtime bootstrap fails.
+- [ ] Program Input values are echoed and consumed in order; multiple values and missing input behave predictably.
+- [ ] Syntax/runtime errors report useful output; infinite loops time out and Stop terminates the worker.
+- [ ] C, C++, and Java are not run by the single-file Playground; multi-file execution may use its configured provider.
 - [ ] A deliberately broken C program (a missing `;`) returns `compilation_error` with the compiler output and the reported line — a learning signal, never a fix or a patch.
 - [ ] HTML Run Preview works in the sandboxed browser preview; the console Run Code action remains disabled for HTML.
 - [ ] In the authenticated multi-file workspace, C/C++/Java use the secure remote runner; Python/JavaScript remain single-file Playground languages.

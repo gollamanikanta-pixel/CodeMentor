@@ -13,7 +13,7 @@ import {
 import { Pill } from '../components/ui';
 import {
   comingSoonLanguageNames,
-  interactiveRunnerLanguages,
+  localRunnerLanguages,
 } from '../data/languages';
 
 const SECTIONS: Array<{ icon: typeof BookOpen; title: string; body: ReactNode }> = [
@@ -32,8 +32,8 @@ const SECTIONS: Array<{ icon: typeof BookOpen; title: string; body: ReactNode }>
     title: 'Playground guide',
     body: (
       <p>
-        Write or upload a program, choose an executable language, then click <strong>Run Code</strong>. When the program starts,
-        type each requested value in the live console input and press Enter. Use <strong>Analyze Locally</strong> for concepts,
+        Write a Python or JavaScript program, add any input under <strong>Program Input</strong>, then click <strong>Run Code</strong>.
+        Runs happen locally in a browser worker. Use <strong>Analyze Locally</strong> for concepts,
         line-by-line explanations, visuals
         and quizzes. <strong>I Fixed It — Run Code Again</strong> runs only the code currently in the editor.
       </p>
@@ -52,13 +52,13 @@ const SECTIONS: Array<{ icon: typeof BookOpen; title: string; body: ReactNode }>
   },
   {
     icon: Server,
-    title: 'Interactive Runner languages',
+    title: 'Browser-based execution',
     body: (
       <p>
-        <strong>{interactiveRunnerLanguages.join(', ')}</strong> are available in isolated E2B cloud sandboxes with outbound internet access
-        disabled. Source code is sent to E2B through the configured backend runner; set an E2B API key and build the language template
-        before running programs. JavaScript supports <code>input('Enter a number: ')</code>; the other languages use their standard
-        stdin input functions. HTML is available through the Sandboxed Browser Preview, which blocks external resources.
+        <strong>{localRunnerLanguages.join(', ')}</strong> run in dedicated browser workers, so their source is not uploaded to an
+        execution service. Python downloads its Pyodide runtime from jsDelivr, and your programs can make their own network requests.
+        Add standard input before running. HTML/CSS/JavaScript web projects are rendered in a sandboxed browser preview. C, C++, and Java
+        are not run by the single-file Playground; multi-file execution may use a configured remote provider.
       </p>
     ),
   },
@@ -107,8 +107,8 @@ const FAQS = [
     'It identifies likely issues, explains what happened and why, and gives progressive hints and self-check questions. It never returns corrected code, exact fixes, patches or diffs.',
   ],
   [
-    'Which languages can run interactively?',
-    'Python, JavaScript, C, C++, Java, C#, Go, PHP, Ruby, Rust and Kotlin use the configured E2B cloud runner. TypeScript and SQL support local analysis, while HTML uses a sandboxed browser preview.',
+    'Which languages can run?',
+    'Python and JavaScript run locally in browser workers. HTML web projects use a sandboxed browser preview. C, C++, and Java are not run in the single-file Playground; multi-file execution may use a configured provider. Other listed languages are coming soon.',
   ],
   [
     'What should I keep out of learning code?',

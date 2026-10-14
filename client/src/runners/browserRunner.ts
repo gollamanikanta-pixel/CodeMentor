@@ -27,13 +27,14 @@ function createWorker(language: RunnableLanguage): Worker {
 /**
  * Runs learner code in a dedicated browser worker. The worker is always
  * terminated afterwards — on success, error or timeout — so no long-running
- * student code can keep the page busy. Nothing here touches the network.
+ * student code can keep the page busy.
  */
 export async function runBrowserCode(
   language: RunnableLanguage,
   sourceCode: string,
   stdin: string,
   onProgress?: ProgressHandler,
+  signal?: AbortSignal,
 ): Promise<ExecutionResult> {
   const executionMode = language === 'Python' ? 'browser_python' : 'browser_javascript';
 
@@ -65,6 +66,20 @@ export async function runBrowserCode(
   const worker = createWorker(language);
 
   return new Promise<ExecutionResult>((resolve) => {
+    if (signal?.aborted) {
+      worker.terminate();
+      resolve({
+        status: 'cancelled',
+        stdout: '',
+        stderr: '',
+        message: 'Program stopped.',
+        time: null,
+        errorLine: null,
+        errorLineConfidence: 'unknown',
+        executionMode,
+      });
+      return;
+    }
     let settled = false;
     let executionTimer: number | undefined;
     let bootstrapTimer: number | undefined;
@@ -74,9 +89,22 @@ export async function runBrowserCode(
       settled = true;
       if (bootstrapTimer !== undefined) window.clearTimeout(bootstrapTimer);
       if (executionTimer !== undefined) window.clearTimeout(executionTimer);
+      signal?.removeEventListener('abort', abort);
       worker.terminate();
       resolve(result);
     };
+    const abort = () =>
+      finish({
+        status: 'cancelled',
+        stdout: '',
+        stderr: '',
+        message: 'Program stopped.',
+        time: null,
+        errorLine: null,
+        errorLineConfidence: 'unknown',
+        executionMode,
+      });
+    signal?.addEventListener('abort', abort, { once: true });
 
     bootstrapTimer = window.setTimeout(() => {
       finish({
