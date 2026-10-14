@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ExecutionResult, LanguageName, LocalAnalysis } from '../types';
 import { analyzeLocally, analyzerSupports } from '../analyzers/localAnalyzer';
-import { getLanguage, isRunnable } from '../data/languages';
+import { getLanguage, isRunnable, isSecureRemote } from '../data/languages';
+import { requestSecureRun } from '../api/client';
 import { runBrowserCode } from '../runners/browserRunner';
 import { readLocal, writeLocal, STORAGE_KEYS } from '../storage/localStorage';
 import { useSettings } from '../settings/SettingsContext';
@@ -79,13 +80,11 @@ export function usePlayground() {
   );
 
   const startInteractiveRun = useCallback(async (): Promise<ExecutionResult | null> => {
-    if (!isRunnable(language)) {
-      notify(
-        language === 'C' || language === 'C++' || language === 'Java'
-          ? 'The single-file Playground does not run C, C++, or Java on Vercel. Multi-file execution may use a configured remote provider.'
-          : getLanguage(language)?.statusDescription ?? 'This language is not runnable yet.',
-        'warning',
-      );
+    const localRun = isRunnable(language);
+    const languageConfig = getLanguage(language);
+    const remoteRun = isSecureRemote(language) && Boolean(languageConfig?.providerLanguage);
+    if (!localRun && !remoteRun) {
+      notify(languageConfig?.statusDescription ?? 'This language is not runnable yet.', 'warning');
       return null;
     }
 
@@ -101,18 +100,39 @@ export function usePlayground() {
     setTerminalOutput('');
     setTerminalError('');
     setRunning(true);
-    setRuntimeMessage('Preparing the local browser runner…');
+    setRuntimeMessage(localRun ? 'Preparing the local browser runner…' : 'Submitting to the secure execution service…');
 
     try {
-      const result = await runBrowserCode(
-        language,
-        source,
-        stdin,
-        (_status, message) => {
-          if (token === runToken.current) setRuntimeMessage(message);
-        },
-        controller.signal,
-      );
+      let result: ExecutionResult;
+      if (localRun) {
+        result = await runBrowserCode(
+          language,
+          source,
+          stdin,
+          (_status, message) => {
+            if (token === runToken.current) setRuntimeMessage(message);
+          },
+          controller.signal,
+        );
+      } else {
+        const providerLanguage = languageConfig?.providerLanguage;
+        if (!providerLanguage) throw new Error(`${language} has no configured secure execution mapping.`);
+        const response = await requestSecureRun({ source, stdin, language: providerLanguage }, controller.signal);
+        result = response.ok
+          ? { ...response.data, stdin, stdinEchoed: false, executionMode: 'secure_remote' }
+          : {
+              status: 'unavailable',
+              stdout: '',
+              stderr: '',
+              message: response.data.message ?? 'The secure execution service could not accept this run.',
+              time: null,
+              errorLine: null,
+              errorLineConfidence: 'unknown',
+              stdin,
+              stdinEchoed: false,
+              executionMode: 'secure_remote',
+            };
+      }
       if (token !== runToken.current) return null;
       setExecution(result);
       writeLocal(STORAGE_KEYS.latestExecution, result);
@@ -131,7 +151,13 @@ export function usePlayground() {
       setRuntimeMessage('');
       if (result.status !== 'cancelled') {
         notify(
-          result.status === 'success' ? 'Run completed in your browser.' : 'The local run returned a learning signal.',
+          result.status === 'success'
+            ? localRun
+              ? 'Run completed in your browser.'
+              : 'Run completed in the secure execution service.'
+            : localRun
+              ? 'The local run returned a learning signal.'
+              : 'The secure run returned a learning signal.',
           result.status === 'success' ? 'success' : 'warning',
         );
       }
@@ -141,7 +167,7 @@ export function usePlayground() {
       setRunning(false);
       runAbort.current = null;
       setRuntimeMessage('');
-      const message = error instanceof Error ? error.message : 'The local runner could not complete.';
+      const message = error instanceof Error ? error.message : 'The code runner could not complete.';
       setTerminalError(message);
       notify(message, 'warning');
       return null;

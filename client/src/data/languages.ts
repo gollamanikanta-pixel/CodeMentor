@@ -43,8 +43,8 @@ export type LanguageConfig = {
 
 const SECURE_MESSAGE =
   'The hosted interactive runner is not configured. Follow the E2B runner setup instructions in README.md.';
-const SOURCE_ONLY_MESSAGE =
-  'The single-file Playground does not run this language on Vercel. You can still write and save it; multi-file execution may use a configured remote provider.';
+const SECURE_REMOTE_MESSAGE =
+  'Runs in the configured isolated execution service when it reports this language ready. Source code and input are sent only after you choose Run Code.';
 
 /**
  * The exact capability statement required in the Help centre, secure-runner
@@ -172,14 +172,14 @@ export const languageConfigs: LanguageConfig[] = [
   },
   ...(['c', 'cpp', 'java', 'csharp', 'go', 'php', 'ruby', 'rust', 'kotlin'] as LanguageKey[]).map(
     (key): LanguageConfig => {
-      const sourceOnly = key === 'c' || key === 'cpp' || key === 'java';
+      const secureRemote = key === 'c' || key === 'cpp' || key === 'java';
       return {
         key,
         ...SECURE_META[key],
-        executionMode: sourceOnly ? 'unavailable' : 'interactive_hosted',
-        statusLabel: sourceOnly ? 'Source only on Vercel' : 'Hosted interactive runner',
-        statusDescription: sourceOnly ? SOURCE_ONLY_MESSAGE : SECURE_MESSAGE,
-        executionEnabled: !sourceOnly,
+        executionMode: secureRemote ? 'secure_remote' : 'interactive_hosted',
+        statusLabel: secureRemote ? 'Checking secure runner' : 'Hosted interactive runner',
+        statusDescription: secureRemote ? SECURE_REMOTE_MESSAGE : SECURE_MESSAGE,
+        executionEnabled: false,
         analysisSupported: false,
         providerLanguage: key,
         starter: SECURE_STARTERS[key],
@@ -220,7 +220,7 @@ export const localRunnerLanguages: LanguageName[] = [
   'Python',
   'JavaScript',
 ];
-export const sourceOnlyLanguages: LanguageName[] = ['C', 'C++', 'Java'];
+export const secureRemoteLanguages: LanguageName[] = ['C', 'C++', 'Java'];
 export const multiFileExecutionLanguages: LanguageName[] = ['C', 'C++', 'Java'];
 export const previewLanguages = ['HTML'];
 export const plannedAnalysisLanguages = ['TypeScript', 'SQL'];

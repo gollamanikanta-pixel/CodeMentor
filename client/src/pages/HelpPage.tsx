@@ -58,7 +58,8 @@ const SECTIONS: Array<{ icon: typeof BookOpen; title: string; body: ReactNode }>
         <strong>{localRunnerLanguages.join(', ')}</strong> run in dedicated browser workers, so their source is not uploaded to an
         execution service. Python downloads its Pyodide runtime from jsDelivr, and your programs can make their own network requests.
         Add standard input before running. HTML/CSS/JavaScript web projects are rendered in a sandboxed browser preview. C, C++, and Java
-        are not run by the single-file Playground; multi-file execution may use a configured remote provider.
+        run through the configured isolated execution service when it reports the language ready; their source and input are sent only
+        after you choose Run Code.
       </p>
     ),
   },
@@ -108,7 +109,7 @@ const FAQS = [
   ],
   [
     'Which languages can run?',
-    'Python and JavaScript run locally in browser workers. HTML web projects use a sandboxed browser preview. C, C++, and Java are not run in the single-file Playground; multi-file execution may use a configured provider. Other listed languages are coming soon.',
+    'Python and JavaScript run locally in browser workers. C, C++, and Java run through the configured isolated execution service when the language is reported ready; source and input are sent only after you choose Run Code. HTML web projects use a sandboxed browser preview. Other listed languages are coming soon.',
   ],
   [
     'What should I keep out of learning code?',

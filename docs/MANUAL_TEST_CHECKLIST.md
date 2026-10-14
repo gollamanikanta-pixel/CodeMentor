@@ -113,10 +113,11 @@ row says otherwise.
 - [ ] Python loads Pyodide from jsDelivr on first use and reports a clear error if runtime bootstrap fails.
 - [ ] Program Input values are echoed and consumed in order; multiple values and missing input behave predictably.
 - [ ] Syntax/runtime errors report useful output; infinite loops time out and Stop terminates the worker.
-- [ ] C, C++, and Java are not run by the single-file Playground; multi-file execution may use its configured provider.
+- [ ] C, C++, and Java show the secure-runner readiness state and run from the single-file Playground only when their capability is ready.
+- [ ] C, C++, and Java source and stdin are sent to the configured isolated service only after the learner chooses Run Code.
 - [ ] A deliberately broken C program (a missing `;`) returns `compilation_error` with the compiler output and the reported line — a learning signal, never a fix or a patch.
 - [ ] HTML Run Preview works in the sandboxed browser preview; the console Run Code action remains disabled for HTML.
-- [ ] In the authenticated multi-file workspace, C/C++/Java use the secure remote runner; Python/JavaScript remain single-file Playground languages.
+- [ ] Python/JavaScript remain local single-file browser runners; C/C++/Java use the configured secure remote runner from the single-file Playground and multi-file workspace.
 - [ ] Running twice within the cooldown shows the honest “cooling down” message rather than the runner's raw rate-limit error.
 
 ## 13. AI Deep Help

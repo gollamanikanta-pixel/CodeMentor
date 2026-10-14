@@ -42,10 +42,12 @@ import {
   createProjectFile,
   deleteProject,
   deleteProjectFile,
+  getExecutionCapabilities,
   getProject,
   updateProject,
   updateProjectFile,
 } from '../api/client';
+import type { ExecutionCapabilities } from '../api/client';
 import type { LanguageName, StoredProject } from '../types';
 
 const MAX_UPLOAD_BYTES = 51200;
@@ -64,15 +66,37 @@ export function PlaygroundPage() {
   const [savedFileId, setSavedFileId] = useState<string>();
   const [savedFilePath, setSavedFilePath] = useState('');
   const [revealAfterRun, setRevealAfterRun] = useState(false);
+  const [executionCapabilities, setExecutionCapabilities] = useState<ExecutionCapabilities | null>(null);
+  const [capabilitiesChecked, setCapabilitiesChecked] = useState(false);
   const jumpToEditorLine = useRef<(line: number) => void>(() => {});
 
   const language = playground.language;
   const config = getLanguage(language);
   const languageAvailable = isLanguageAvailable(language);
-  const canRun = languageAvailable && (config?.executionEnabled ?? false);
+  const secureRemoteLanguage = config?.executionMode === 'secure_remote';
+  const secureRemoteReady = Boolean(
+    secureRemoteLanguage &&
+      executionCapabilities?.reachable &&
+      config?.providerLanguage &&
+      executionCapabilities.languages[config.providerLanguage]?.ready,
+  );
+  const canRun = languageAvailable && ((config?.executionEnabled ?? false) || secureRemoteReady);
   const statusLabel = !languageAvailable
     ? 'Coming soon'
-    : config?.statusLabel;
+    : secureRemoteLanguage
+      ? !capabilitiesChecked
+        ? 'Checking secure runner'
+        : secureRemoteReady
+          ? 'Secure remote runner ready'
+          : 'Secure runner unavailable'
+      : config?.statusLabel;
+  const statusDescription = secureRemoteLanguage
+    ? capabilitiesChecked
+      ? executionCapabilities?.languages[config?.providerLanguage ?? '']?.note ??
+        executionCapabilities?.message ??
+        'The secure execution service could not be checked. Local guidance remains available.'
+      : 'Checking whether the secure execution service is ready for this language.'
+    : config?.statusDescription;
   const statusTone = canRun ? 'amber' : config?.analysisSupported ? 'amber' : 'neutral';
   const markers = useMemo(() => markersFromAnalysis(playground.analysis, playground.execution), [playground.analysis, playground.execution]);
   const revealAnalysis = useCallback(() => {
@@ -85,6 +109,19 @@ export function PlaygroundPage() {
     document.querySelector('.editor-card')?.scrollIntoView({ behavior: 'instant', block: 'start' });
     window.requestAnimationFrame(() => jumpToEditorLine.current(line));
   }, []);
+
+  useEffect(() => {
+    if (!secureRemoteLanguage || capabilitiesChecked) return;
+    let cancelled = false;
+    void getExecutionCapabilities().then((capabilities) => {
+      if (cancelled) return;
+      setExecutionCapabilities(capabilities);
+      setCapabilitiesChecked(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [secureRemoteLanguage, capabilitiesChecked]);
 
   useEffect(() => {
     if (playground.running) revealConsole();
@@ -315,7 +352,8 @@ export function PlaygroundPage() {
         </div>
         <div className="project-meta">
           <span>
-            <ShieldCheck size={14} aria-hidden="true" /> Python and JavaScript run in your browser; save a project to sync it to your account
+            <ShieldCheck size={14} aria-hidden="true" />
+            Python and JavaScript run in your browser; C, C++ and Java use the secure runner when ready
           </span>
         </div>
       </div>
@@ -493,8 +531,10 @@ export function PlaygroundPage() {
           {!languageAvailable
             ? `${language} is coming soon. Choose one of the available languages to run and learn from code. `
             : canRun
-            ? `${language} runs in a local browser worker, not a remote execution service. Your code can make its own network requests.${language === 'Python' ? ' Python downloads its runtime from jsDelivr.' : ''} `
-            : `${config?.statusDescription} `}
+            ? secureRemoteLanguage
+              ? `${language} source code and input are sent to the configured isolated execution service only when you choose Run Code. `
+              : `${language} runs in a local browser worker, not a remote execution service. Your code can make its own network requests.${language === 'Python' ? ' Python downloads its runtime from jsDelivr.' : ''} `
+            : `${statusDescription} `}
           Use Local Guidance First. Local analysis does not send source to an AI service.
         </span>
         <Link to="/help">Learn about privacy</Link>
