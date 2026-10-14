@@ -455,6 +455,23 @@ export function PlaygroundPage() {
             </span>
           </div>
 
+          {languageAvailable && language !== 'HTML' ? (
+            <div className="console-input program-input">
+              <label htmlFor="playground-stdin">Program Input (stdin)</label>
+              <span>
+                Enter one input value per line. C, C++, and Java input is sent to the isolated runner only when you choose Run Code.
+              </span>
+              <textarea
+                id="playground-stdin"
+                aria-label="Program Input (stdin)"
+                value={playground.stdin}
+                onChange={(event) => playground.setStdin(event.target.value)}
+                placeholder="Input values, one per line"
+                rows={3}
+              />
+            </div>
+          ) : null}
+
         </section>
 
         <AnalysisPanel
