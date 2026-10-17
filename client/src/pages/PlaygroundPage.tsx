@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
-  Bot,
   ChevronDown,
   Code2,
   FileCode2,
@@ -23,7 +22,7 @@ import { VisualsTab } from '../features/visuals/VisualsTab';
 import { QuizPanel } from '../features/quiz/QuizPanel';
 import { ConsolePanel } from '../features/console/ConsolePanel';
 import { HtmlPreviewPanel } from '../features/preview/HtmlPreviewPanel';
-import { AiHelpDialog } from '../components/AiHelpDialog';
+import { AiChatWidget } from '../components/AiChatWidget';
 import { usePlayground } from '../hooks/usePlayground';
 import { useToast } from '../hooks/useToast';
 import { useSettings } from '../settings/SettingsContext';
@@ -60,7 +59,6 @@ export function PlaygroundPage() {
   const requestedProjectId = searchParams.get('projectId');
   const { notify } = useToast();
   const [analysisTab, setAnalysisTab] = useState<AnalysisTab>('Overview');
-  const [aiOpen, setAiOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedProjectId, setSavedProjectId] = useState<string>();
   const [savedFileId, setSavedFileId] = useState<string>();
@@ -537,9 +535,6 @@ export function PlaygroundPage() {
         >
           I Fixed It — Run Code Again
         </Button>
-        <Button variant="ai" onClick={() => setAiOpen(true)} icon={Bot} disabled={!settings.aiDeepHelp}>
-          Ask AI for Deeper Help
-        </Button>
       </div>
 
       <div className="runner-note">
@@ -557,15 +552,14 @@ export function PlaygroundPage() {
         <Link to="/help">Learn about privacy</Link>
       </div>
 
-      <AiHelpDialog
-        open={aiOpen}
-        onClose={() => setAiOpen(false)}
+      <AiChatWidget
         code={playground.code}
         language={language}
         execution={playground.execution}
         analysis={playground.analysis}
         hintLevel={settings.hintLevel}
         explanationLevel={settings.explanationLevel}
+        enabled={settings.aiDeepHelp}
       />
     </div>
   );

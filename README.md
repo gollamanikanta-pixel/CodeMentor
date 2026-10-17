@@ -18,7 +18,7 @@ CodeMentor **guides, it never auto-fixes**. It explains errors, highlights likel
 - **Local quiz generation** — concept, true/false, find-issue and debugging-strategy questions with 5/10/15 counts and three difficulty levels. Signed-in quiz results and history are stored in the account API; browser-only history is used only without an account.
 - **Projects** — save, search, filter, rename, duplicate, export and delete; signed-in Playground source and project operations use the protected account API. Existing browser-only projects are not presented as account data.
 - **Settings** — appearance, editor and learning preferences persist locally and sync to the signed-in account. Playground drafts remain browser-local; saving a project uploads source only on explicit action.
-- **AI Deep Help and Chat (optional)** — on-demand, authenticated provider requests; Deep Help uses stable-hash caching, chat supports follow-up questions, and local guidance remains available when AI is unavailable.
+- **AI Deep Help and Chat (optional)** — a persistent draggable Playground tutor panel with suggested questions and follow-up chat; provider requests are authenticated, while local guidance remains available when AI is unavailable.
 - **Accounts** — register, log in, log out and recover a password before entering the authenticated workspace. Sessions are opaque httpOnly cookies; every state-changing request is CSRF-checked.
 - **Account-backed projects and quiz history** — source files, projects, settings, quiz history and execution history use owner-scoped protected APIs. Signed-in learners can explicitly import legacy browser projects, the current draft (including standard input), and quiz summaries/history dates; the originals remain in browser storage.
 - **Multi-file workspace (v2)** — a file explorer, themed Monaco editor, entry-file selection, ZIP import/export and a sandboxed browser preview for web projects.
@@ -331,12 +331,13 @@ For OpenAI-compatible providers, `AI_API_BASE_URL` should be the provider's comp
 - AI Chat sends the code context and recent conversation only when the learner sends a message; the chat endpoint is rate-limited to 10 requests per minute. Gemini account quotas and billing apply.
 - The backend builds a stable hash from the source excerpt, language, execution result, local error fingerprints, explanation level, hint level, requested sections and model.
 - Cache hit → returns `cached: true` without a provider call.
+- The always-visible Playground AI chat panel can be dragged, keyboard-repositioned, or minimized; suggested questions adapt to local analysis/run errors and only fill the composer until the learner chooses Send.
 - AI Chat carries up to 10 recent conversation messages for follow-up questions and is not cached.
 - Output is capped: summary ≤ 4 sentences, ≤ 5 concepts, ≤ 5 issue/hint items, ≤ 5 tips, ≤ 5 extra quiz questions. Large source is sent as a focused excerpt plus nearby lines and the local summary.
 - At most **one** structured JSON repair retry, never a retry loop.
 - If AI is missing, the provider rejects or rate-limits the request, or a call fails, the local analysis stays fully available.
 
-AI is never called while typing, on page load, on tab switching, on theme/setting changes, on save, on local analysis, on visual/quiz generation, or on upload. Near the AI controls the UI shows **“Use Local Guidance First.”**
+AI is never called while typing, on page load, on tab switching, on theme/setting changes, on save, on local analysis, on visual/quiz generation, or on upload. The chat panel explains that source and conversation are sent only when the learner presses **Send**.
 
 ## 11. Security and privacy
 
