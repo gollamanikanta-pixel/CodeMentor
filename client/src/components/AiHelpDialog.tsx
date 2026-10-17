@@ -1,14 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { Bot, Lightbulb, ShieldCheck, Sparkles } from 'lucide-react';
-import type { DeepAnalysis, ExecutionResult, LanguageName, LocalAnalysis } from '../types';
-import { Button, Modal, Pill } from './ui';
-import { requestDeepHelp } from '../api/client';
-import { useToast } from '../hooks/useToast';
+import { Bot, Send, ShieldCheck } from 'lucide-react';
+import type { ExecutionResult, LanguageName, LocalAnalysis } from '../types';
+import { Button, Modal } from './ui';
+import { requestAiChat, type AiChatMessage } from '../api/client';
 import { useAiUsage } from '../hooks/useAiUsage';
 import { useAuth } from '../auth/AuthContext';
 
-type Result = DeepAnalysis & { cached?: boolean };
+type ChatMessage = AiChatMessage & { id: number };
+
+const INTRO_MESSAGE =
+  'Hi! Ask me about your current code, a concept, or an error. I’ll guide you with explanations and hints so you can work out the solution.';
 
 export function AiHelpDialog({
   open,
@@ -19,7 +21,6 @@ export function AiHelpDialog({
   analysis,
   hintLevel,
   explanationLevel,
-  onResult,
 }: {
   open: boolean;
   onClose: () => void;
@@ -29,50 +30,84 @@ export function AiHelpDialog({
   analysis: LocalAnalysis | null;
   hintLevel: string;
   explanationLevel: string;
-  onResult: (result: Result) => void;
 }) {
-  const { notify } = useToast();
   const { user } = useAuth();
-  const { usage, refresh } = useAiUsage();
+  const { usage } = useAiUsage();
+  const [messages, setMessages] = useState<ChatMessage[]>([{ id: 0, role: 'assistant', content: INTRO_MESSAGE }]);
+  const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState('');
+  const conversationRef = useRef<HTMLDivElement | null>(null);
+  const nextId = useRef(1);
+  const contextVersion = useRef(0);
 
   useEffect(() => {
+    contextVersion.current += 1;
+    setLoading(false);
     if (!open) return;
-    setResult(null);
+    setMessages([{ id: 0, role: 'assistant', content: INTRO_MESSAGE }]);
+    setDraft('');
     setError('');
+    nextId.current = 1;
   }, [open, code, language]);
 
-  const runDeepHelp = async () => {
-    setLoading(true);
+  useEffect(() => {
+    conversationRef.current?.scrollTo({ top: conversationRef.current.scrollHeight, behavior: 'smooth' });
+  }, [messages, loading]);
+
+  const sendMessage = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const question = draft.trim();
+    if (!question || loading || !user || !usage.configured) return;
+
+    const userMessage: ChatMessage = { id: nextId.current++, role: 'user', content: question };
+    const nextMessages = [...messages, userMessage];
+    setMessages(nextMessages);
+    setDraft('');
     setError('');
+    setLoading(true);
+    const requestContextVersion = contextVersion.current;
+
     try {
-      const { ok, data } = await requestDeepHelp({
+      const conversation = nextMessages
+        .filter((message) => message.id !== 0)
+        .slice(-10)
+        .map(({ role, content }) => ({ role, content }));
+      if (conversation[0]?.role === 'assistant') conversation.shift();
+      const { ok, data } = await requestAiChat({
         source: code,
         language,
+        messages: conversation,
         execution,
         localAnalysis: analysis,
         explanationLevel,
         hintLevel,
       });
+      if (requestContextVersion !== contextVersion.current) return;
       if (!ok) {
-        setError(data.message || 'AI Deep Help is unavailable right now. Local guidance remains available.');
-      } else {
-        setResult(data);
-        onResult(data);
-        notify(
-          data.cached
-            ? 'A saved AI explanation is available for this code version. Using it will not consume another AI request.'
-            : 'AI Deep Help is ready.',
-          'info',
-        );
+        setMessages((current) => current.filter((message) => message.id !== userMessage.id));
+        setDraft(question);
+        setError(data.message || 'AI chat is unavailable right now. Local guidance remains available.');
+        return;
       }
+      setMessages((current) => [
+        ...current,
+        { id: nextId.current++, role: 'assistant', content: data.reply },
+      ]);
     } catch {
-      setError('AI Deep Help could not be reached. Local guidance remains available.');
+      if (requestContextVersion !== contextVersion.current) return;
+      setMessages((current) => current.filter((message) => message.id !== userMessage.id));
+      setDraft(question);
+      setError('AI chat could not be reached. Local guidance remains available.');
     } finally {
-      setLoading(false);
-      void refresh();
+      if (requestContextVersion === contextVersion.current) setLoading(false);
+    }
+  };
+
+  const onComposerKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      event.currentTarget.form?.requestSubmit();
     }
   };
 
@@ -81,107 +116,74 @@ export function AiHelpDialog({
       open={open}
       onClose={onClose}
       labelledBy="ai-help-title"
+      className="ai-chat-modal"
       title={
         <span className="ai-title">
-          <Bot size={18} /> AI Deep Help
+          <Bot size={18} /> CodeMentor AI Chat
         </span>
       }
-      footer={
-        result ? (
-          <Button onClick={onClose}>Close</Button>
-        ) : (
-          <>
-            <Button variant="outline" onClick={onClose}>
-              Keep learning locally
-            </Button>
-            <Button variant="ai" icon={Sparkles} disabled={loading || !usage.configured || !user} onClick={runDeepHelp}>
-              {loading ? 'Asking for deeper guidance…' : 'Ask AI for Deeper Help'}
-            </Button>
-          </>
-        )
-      }
     >
-      <div className="ai-body">
+      <div className="ai-chat">
         <p className="ai-local-note">
           <ShieldCheck size={15} /> Use Local Guidance First.
         </p>
 
         {!user ? (
           <div className="ai-status warning">
-            <strong>Sign in to use AI Deep Help.</strong>
-            <p>
-              AI Deep Help is account-gated so fair use stays fair. Everything local — analysis, hints, visuals and quizzes — works
-              right now without an account.
-            </p>
+            <strong>Sign in to use AI chat.</strong>
+            <p>Local analysis, hints, visuals, and quizzes continue to work without an account.</p>
             <div className="auth-links">
               <Link to={`/login?next=${encodeURIComponent('/playground')}`}>Sign in or create an account</Link>
             </div>
           </div>
         ) : !usage.configured ? (
           <div className="ai-status warning">
-            <strong>AI Deep Help is not configured on this server.</strong>
-            <p>
-              Everything local — analysis, hints, visuals and quizzes — is fully available. A deployment administrator can configure
-              AI_API_BASE_URL, AI_API_KEY and AI_MODEL on the backend only. Never enter provider credentials in the browser.
-            </p>
+            <strong>AI chat is not configured on this server.</strong>
+            <p>A deployment administrator can configure the AI provider on the backend. Never enter provider credentials in the browser.</p>
           </div>
-        ) : (
-          <div className="ai-status">
-            <strong>AI Deep Help is configured.</strong>
-            <span className="muted">Provider access is checked when you ask. Provider availability, access, quotas, and billing still apply.</span>
-          </div>
-        )}
+        ) : null}
 
-        {!result ? (
-          <>
-            <p>
-              Ask for deeper guidance on this version of your code?               AI adds a deeper, teacher-style explanation to this code and any available local analysis only when you ask.
-            </p>
-            <ul className="ai-rules">
-              <li>Explains what happened, why, and the concept to review.</li>
-              <li>Gives progressive hints, self-check questions and debugging steps.</li>
-              <li>Never writes corrected code, patches, diffs or exact fixes.</li>
-            </ul>
-          </>
-        ) : (
-          <div className="ai-result">
-            {result.cached ? <Pill tone="green">Saved explanation reused — no request used</Pill> : <Pill tone="violet">Fresh AI explanation</Pill>}
-            <h3>Deeper explanation</h3>
-            <p>{result.summary}</p>
-            {result.deeperExplanation ? <p>{result.deeperExplanation}</p> : null}
-            {result.concepts?.length ? (
-              <div className="concept-list">
-                <strong>Concepts to review</strong>
-                {result.concepts.map((concept) => (
-                  <span key={concept}>
-                    <Lightbulb size={14} /> {concept}
-                  </span>
-                ))}
-              </div>
-            ) : null}
-            {result.debuggingSteps?.length ? (
-              <div className="debug-steps">
-                <strong>Suggested debugging steps</strong>
-                {result.debuggingSteps.map((step, index) => (
-                  <span key={step}>
-                    <i>{index + 1}</i> {step}
-                  </span>
-                ))}
-              </div>
-            ) : null}
-            {result.tips?.length ? (
-              <ul className="tips-list">
-                {result.tips.map((tip) => (
-                  <li key={tip}>
-                    <Lightbulb size={15} /> {tip}
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </div>
-        )}
+        <div className="ai-chat-transcript" ref={conversationRef} role="log" aria-label="AI chat messages" aria-live="polite">
+          {messages.map((message) => (
+            <div className={`ai-chat-message ${message.role}`} key={message.id}>
+              {message.role === 'assistant' ? <Bot size={15} aria-hidden="true" /> : null}
+              <p>{message.content}</p>
+            </div>
+          ))}
+          {loading ? (
+            <div className="ai-chat-message assistant" role="status">
+              <Bot size={15} aria-hidden="true" />
+              <p>Thinking…</p>
+            </div>
+          ) : null}
+        </div>
 
-        {error ? <p className="ai-error">{error}</p> : null}
+        {error ? <p className="ai-error" role="alert">{error}</p> : null}
+        <p className="ai-chat-privacy">
+          <ShieldCheck size={14} aria-hidden="true" />
+          Your code, latest run details, and chat are sent to the configured AI provider only when you send a message. {explanationLevel} explanations · {hintLevel} hints.
+        </p>
+        <form className="ai-chat-composer" onSubmit={sendMessage}>
+          <textarea
+            aria-label="Message the AI tutor"
+            placeholder={`Ask a question about your ${language} code…`}
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={onComposerKeyDown}
+            maxLength={4000}
+            rows={2}
+            disabled={!user || !usage.configured || loading}
+          />
+          <Button
+            type="submit"
+            variant="ai"
+            icon={Send}
+            disabled={!draft.trim() || !user || !usage.configured || loading}
+            aria-label="Send message"
+          >
+            Send
+          </Button>
+        </form>
       </div>
     </Modal>
   );

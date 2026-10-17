@@ -3860,6 +3860,132 @@ a:focus-visible,
   padding: 19px;
 }
 
+.ai-chat-modal {
+  display: flex;
+  flex-direction: column;
+  width: min(680px, 100%);
+  min-height: min(580px, 86vh);
+  overflow: hidden;
+}
+
+.ai-chat-modal .modal-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  padding: 16px 19px 19px;
+  overflow: hidden;
+}
+
+.ai-chat {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.ai-chat .ai-local-note {
+  margin-bottom: 10px;
+}
+
+.ai-chat .ai-status {
+  margin-bottom: 10px;
+}
+
+.ai-chat-transcript {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 180px;
+  max-height: 48vh;
+  padding: 14px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface2);
+}
+
+.ai-chat-message {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 88%;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  color: var(--text);
+  background: var(--surface);
+}
+
+.ai-chat-message.user {
+  align-self: flex-end;
+  border-color: rgba(139, 119, 255, 0.28);
+  background: var(--violet-wash);
+}
+
+.ai-chat-message.assistant {
+  align-self: flex-start;
+}
+
+.ai-chat-message svg {
+  flex: 0 0 auto;
+  margin-top: 3px;
+  color: var(--violet);
+}
+
+.ai-chat-message p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.ai-chat-privacy {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 10px 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.ai-chat-privacy svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.ai-chat-composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 9px;
+}
+
+.ai-chat-composer textarea {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  max-height: 140px;
+  resize: vertical;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  background: var(--surface);
+  font: inherit;
+  font-size: 13px;
+}
+
+.ai-chat-composer textarea:focus {
+  outline: 2px solid var(--violet);
+  outline-offset: 1px;
+}
+
+.ai-chat-composer .btn {
+  flex: 0 0 auto;
+}
+
 .modal-foot {
   display: flex;
   justify-content: flex-end;

@@ -566,7 +566,6 @@ export function PlaygroundPage() {
         analysis={playground.analysis}
         hintLevel={settings.hintLevel}
         explanationLevel={settings.explanationLevel}
-        onResult={() => undefined}
       />
     </div>
   );

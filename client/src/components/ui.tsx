@@ -132,6 +132,7 @@ export function Modal({
   children,
   footer,
   labelledBy = 'cm-modal-title',
+  className = '',
 }: {
   open: boolean;
   onClose: () => void;
@@ -139,6 +140,7 @@ export function Modal({
   children: ReactNode;
   footer?: ReactNode;
   labelledBy?: string;
+  className?: string;
 }) {
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
 
@@ -167,7 +169,7 @@ export function Modal({
   return (
     <div className="modal-backdrop" role="presentation" onClick={onClose}>
       <div
-        className="modal"
+        className={`modal ${className}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby={labelledBy}

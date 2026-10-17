@@ -1,10 +1,10 @@
 import crypto from 'node:crypto';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
-import { aiUsage, deepAnalyze } from '../services/aiService.js';
+import { aiUsage, chatWithAi, deepAnalyze } from '../services/aiService.js';
 import { accountAllowsAiDeepHelp } from '../services/aiPreferences.js';
 import { executionCapabilities, executionUsage, selectExecutionProvider } from '../providers/index.js';
-import { deepAnalyzeSchema, runSchema } from '../validators/requestSchemas.js';
+import { aiChatSchema, deepAnalyzeSchema, runSchema } from '../validators/requestSchemas.js';
 import { db, now } from '../db/database.js';
 import type { AuthRequest } from '../auth/auth.js';
 import type { DeepAnalyzeInput, SecureRunInput } from '../types/index.js';
@@ -26,6 +26,27 @@ export async function postDeepAnalyze(req: AuthRequest, res: Response) {
   } catch (error) {
     return res.status(503).json({
       message: error instanceof Error ? error.message : 'Deeper guidance is unavailable.',
+    });
+  }
+}
+
+export async function postAiChat(req: AuthRequest, res: Response) {
+  const settings = await db
+    .prepare('SELECT aiDeepHelpEnabled FROM UserSettings WHERE userId=?')
+    .get<{ aiDeepHelpEnabled: number | boolean }>(req.userId!);
+  if (!accountAllowsAiDeepHelp(settings?.aiDeepHelpEnabled)) {
+    return res.status(403).json({ message: 'AI Deep Help is disabled in your account settings. Local guidance remains available.' });
+  }
+  const parsed = aiChatSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ message: 'The chat message or code context is invalid or too large.' });
+  }
+  try {
+    const result = await chatWithAi(parsed.data);
+    return res.json(result);
+  } catch (error) {
+    return res.status(503).json({
+      message: error instanceof Error ? error.message : 'AI chat is unavailable.',
     });
   }
 }
