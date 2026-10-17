@@ -111,24 +111,61 @@ function requestInit(body: unknown): RequestInit {
 }
 
 const PROBE_PROGRAM = '#include <stdio.h>\nint main(void){ puts("ok"); return 0; }';
+const PROBE_PROGRAMS: Record<string, string> = {
+  c: PROBE_PROGRAM,
+  java: 'public class Main { public static void main(String[] args) { System.out.println("ok"); } }',
+};
+const PROBE_CACHE_TTL_MS = 60_000;
+const probeCache = new Map<string, { expiresAt: number; result: { ok: boolean; message: string } }>();
+const pendingProbes = new Map<string, Promise<{ ok: boolean; message: string }>>();
 
 /**
- * Runs one tiny C program to prove submissions really execute. Used by the
- * capabilities endpoint so the UI never claims "Secure runner ready" on a
- * service that lists languages but refuses to run code.
+ * Runs a tiny program to prove a language really executes. Used by the
+ * capabilities endpoint so the UI never claims a language is ready based only
+ * on the provider responding to a different language.
  */
-export async function probeJudge0Execution(): Promise<{ ok: boolean; message: string }> {
+export function probeJudge0Execution(language = 'c'): Promise<{ ok: boolean; message: string }> {
+  const cached = probeCache.get(language);
+  if (cached && cached.expiresAt > Date.now()) return Promise.resolve(cached.result);
+  const pending = pendingProbes.get(language);
+  if (pending) return pending;
+  const request = runJudge0Probe(language)
+    .then((result) => {
+      probeCache.set(language, { expiresAt: Date.now() + PROBE_CACHE_TTL_MS, result });
+      return result;
+    })
+    .finally(() => pendingProbes.delete(language));
+  pendingProbes.set(language, request);
+  return request;
+}
+
+async function runJudge0Probe(language: string): Promise<{ ok: boolean; message: string }> {
   if (!env.judge0BaseUrl) return { ok: false, message: 'Secure execution is not configured.' };
+  const languageId = JUDGE0_LANGUAGE_ID[language];
+  const source = PROBE_PROGRAMS[language];
+  if (!languageId || !source) return { ok: false, message: `No readiness probe is defined for ${language}.` };
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), env.executionTimeoutMs);
   try {
     const response = await fetch(submissionsUrl(), {
-      ...requestInit(buildJudge0Submission(PROBE_PROGRAM, JUDGE0_LANGUAGE_ID.c, '')),
+      ...requestInit(buildJudge0Submission(source, languageId, '')),
       signal: controller.signal,
     });
-    if (response.ok) return { ok: true, message: 'Execution probe succeeded.' };
-    const detail = await providerMessage(response);
-    return { ok: false, message: detail || `The runner responded ${response.status}.` };
+    if (!response.ok) {
+      const detail = await providerMessage(response);
+      return { ok: false, message: detail || `The runner responded ${response.status}.` };
+    }
+    const result = await readBoundedJson<Judge0Response>(response, MAX_PROVIDER_RESPONSE_BYTES);
+    if (result.status?.id === 3 && result.exit_code === 0) {
+      return { ok: true, message: `${language} execution probe succeeded.` };
+    }
+    const detail =
+      result.compile_output || result.stderr || result.message || result.status?.description || 'The program did not complete successfully.';
+    return {
+      ok: false,
+      message: `${language} readiness probe failed: ${detail.replace(/\s+/g, ' ').trim().slice(0, 240)}`,
+    };
   } catch (error) {
     return {
       ok: false,

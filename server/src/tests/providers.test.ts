@@ -6,8 +6,11 @@ import {
   PISTON_SUPPORTED,
   resolvePistonRuntime,
 } from '../providers/pistonExecutionProvider.js';
-import { JUDGE0_RESOURCE_LIMITS } from '../providers/judge0ExecutionProvider.js';
-import { selectExecutionProvider } from '../providers/index.js';
+import {
+  buildJudge0Submission,
+  JUDGE0_RESOURCE_LIMITS,
+} from '../providers/judge0ExecutionProvider.js';
+import { buildJudge0Capabilities, selectExecutionProvider } from '../providers/index.js';
 import { normalizeLiveProviderResult } from '../providers/secureExecutionProvider.js';
 
 /**
@@ -73,6 +76,32 @@ test('Judge0 submissions request explicit execution and network limits', () => {
   assert.equal(JUDGE0_RESOURCE_LIMITS.number_of_runs, 1);
   assert.ok(JUDGE0_RESOURCE_LIMITS.cpu_time_limit > 0);
   assert.ok(JUDGE0_RESOURCE_LIMITS.wall_time_limit >= JUDGE0_RESOURCE_LIMITS.cpu_time_limit);
+});
+
+test('Judge0 applies the same bounded memory limit to Java and other languages', () => {
+  assert.equal(buildJudge0Submission('', 103, '').memory_limit, JUDGE0_RESOURCE_LIMITS.memory_limit);
+  assert.equal(buildJudge0Submission('', 91, '').memory_limit, JUDGE0_RESOURCE_LIMITS.memory_limit);
+});
+
+test('Judge0 capability report reflects the Java readiness probe', () => {
+  const unavailable = buildJudge0Capabilities(
+    '2026-03-25T00:00:00.000Z',
+    { ok: false, message: 'Java readiness probe failed: Could not allocate compressed class space.' },
+    'Judge0 CE remote runtime.',
+  );
+
+  assert.equal(unavailable.reachable, true);
+  assert.equal(unavailable.languages.c.ready, true);
+  assert.equal(unavailable.languages.java.ready, false);
+  assert.match(unavailable.languages.java.note, /compressed class space/);
+  assert.match(unavailable.message, /Java is unavailable/);
+
+  const ready = buildJudge0Capabilities(
+    '2026-03-25T00:00:00.000Z',
+    { ok: true, message: 'java execution probe succeeded.' },
+    'Judge0 CE remote runtime.',
+  );
+  assert.equal(ready.languages.java.ready, true);
 });
 
 test('generic runner responses are allow-listed, type-checked, and source-bounded', () => {

@@ -234,13 +234,13 @@ The legacy interactive terminal is a separate Node service and uses E2B cloud sa
 - sends the learner's source **exactly as written** — CodeMentor never edits, wraps or corrects it;
 - shares one daily-limit + cooldown guard with every other provider, so the public runner's rate limit (roughly one request per second) never surfaces as the learner's error; a rate-limited response degrades to an honest `unavailable` with local guidance.
 
-> **Historical provider verification:** C, C++, Java, C#, Go, PHP, Ruby, Rust and Kotlin returned `status: "success"` with exact program output in earlier provider checks; a deliberately broken C program returned `status: "compilation_error"` with `errorLine: 2`. These backend checks do not mean every mapped language is currently exposed in the learner interface.
+> **Provider verification:** Earlier checks returned successful runs for C, C++, Java, C#, Go, PHP, Ruby, Rust and Kotlin, and a deliberately broken C program returned `status: "compilation_error"` with `errorLine: 2`. A fresh Java 17 check against the current public Judge0 CE returned a JVM compressed-class-space allocation error. The readiness endpoint now probes Java itself and disables Java's Run button when that runtime cannot start; a reachable service alone is not treated as proof that Java works.
 
 Provider responses are streamed with a 2 MiB maximum body size, and learner-facing output is truncated to the configured byte budget before it is returned. Judge0 resource limits, including a request to disable network access, are included in each submission; the remote service must honor those settings, so self-hosted deployments should verify their Judge0 configuration and network isolation. Piston requests also set compile/run time and memory budgets. The default public CE service is an external dependency with its own policies and availability; never submit secrets in learner code.
 
 `EXECUTION_DAILY_LIMIT` and the execution cooldown are best-effort, in-memory limits shared only within one server process. They are not per-account quotas and are not atomic across replicas. The Express rate limiters are also process-local unless a shared store is configured; use shared, durable enforcement before relying on these limits for classroom-scale or multi-instance traffic.
 
-When configured, `GET /api/execution-capabilities` reports provider readiness for the backend's mapped languages after a real submission probe. The single-file Run button for C, C++ and Java is enabled only when the service reports that language ready; this status does not expand the learner-facing language menu.
+When configured, `GET /api/execution-capabilities` reports provider readiness after real C and Java smoke runs (cached for one minute). Java is reported unavailable if its own compiler/runtime probe fails, even when the provider is reachable. The single-file Run button for C, C++ and Java is enabled only when the service reports that language ready; this status does not expand the learner-facing language menu.
 
 ### Piston (keyless) adapter — alternative, with automatic fallback
 
