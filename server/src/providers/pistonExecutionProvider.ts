@@ -2,6 +2,7 @@ import { env } from '../config/env.js';
 import type { SecureRunFile, SecureRunInput, SecureRunResult, SecureRunStatus } from '../types/index.js';
 import { executionGuard, recordExecution, type SecureExecutionProvider } from './secureExecutionProvider.js';
 import { normalizePistonRun, type PistonResponse } from './pistonNormalizer.js';
+import { MAX_PROVIDER_RESPONSE_BYTES, readBoundedJson, readBoundedText } from './providerResponse.js';
 
 /**
  * Piston (https://github.com/engineer-man/piston) adapter.
@@ -67,7 +68,7 @@ export async function fetchPistonRuntimes(force = false): Promise<PistonRuntime[
         signal: controller.signal,
       });
       if (!response.ok) throw new Error(`Piston runtimes responded ${response.status}`);
-      const runtimes = (await response.json()) as PistonRuntime[];
+      const runtimes = await readBoundedJson<PistonRuntime[]>(response, 256 * 1024);
       if (!Array.isArray(runtimes)) throw new Error('Piston runtimes payload was not a list');
       runtimeCache = { at: Date.now(), runtimes };
       return runtimes;
@@ -113,7 +114,7 @@ function compareVersions(a: string, b: string): number {
 /** Reads a safe, short explanation from an error response body. */
 async function providerMessage(response: Response): Promise<string> {
   try {
-    const text = await response.text();
+    const text = await readBoundedText(response, 4096);
     if (!text) return '';
     let message = text;
     try {
@@ -150,6 +151,7 @@ export async function probePistonExecution(): Promise<{ ok: boolean; message: st
         files: [{ name: 'main.c', content: PROBE_PROGRAM }],
         stdin: '',
         compile_timeout: 10000,
+        compile_memory_limit: 268435456,
         run_timeout: 3000,
         run_memory_limit: 268435456,
       }),
@@ -233,6 +235,7 @@ export class PistonExecutionProvider implements SecureExecutionProvider {
           files,
           stdin: input.stdin ?? '',
           compile_timeout: 10000,
+          compile_memory_limit: 268435456,
           run_timeout: env.runTimeoutMs,
           run_memory_limit: 268435456,
         }),
@@ -257,7 +260,7 @@ export class PistonExecutionProvider implements SecureExecutionProvider {
       }
 
       recordExecution();
-      const data = (await response.json()) as PistonResponse;
+      const data = await readBoundedJson<PistonResponse>(response, MAX_PROVIDER_RESPONSE_BYTES);
       const elapsed = Date.now() - startedAt;
 
       // One shared, unit-tested normalizer maps Piston's raw payload onto the

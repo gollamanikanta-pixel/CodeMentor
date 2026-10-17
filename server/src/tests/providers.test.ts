@@ -6,7 +6,9 @@ import {
   PISTON_SUPPORTED,
   resolvePistonRuntime,
 } from '../providers/pistonExecutionProvider.js';
+import { JUDGE0_RESOURCE_LIMITS } from '../providers/judge0ExecutionProvider.js';
 import { selectExecutionProvider } from '../providers/index.js';
+import { normalizeLiveProviderResult } from '../providers/secureExecutionProvider.js';
 
 /**
  * Guards the Piston adapter's language mapping and file packaging: every
@@ -62,4 +64,53 @@ test('provider selection never routes an unmapped language to the remote runner'
   assert.ok('run' in c);
   delete process.env.EXECUTION_PROVIDER;
   delete process.env.EXECUTION_API_BASE_URL;
+});
+
+test('Judge0 submissions request explicit execution and network limits', () => {
+  assert.equal(JUDGE0_RESOURCE_LIMITS.enable_network, false);
+  assert.equal(JUDGE0_RESOURCE_LIMITS.memory_limit, 268435456);
+  assert.equal(JUDGE0_RESOURCE_LIMITS.max_processes_and_or_threads, 20);
+  assert.equal(JUDGE0_RESOURCE_LIMITS.number_of_runs, 1);
+  assert.ok(JUDGE0_RESOURCE_LIMITS.cpu_time_limit > 0);
+  assert.ok(JUDGE0_RESOURCE_LIMITS.wall_time_limit >= JUDGE0_RESOURCE_LIMITS.cpu_time_limit);
+});
+
+test('generic runner responses are allow-listed, type-checked, and source-bounded', () => {
+  const result = normalizeLiveProviderResult(
+    {
+      status: 'runtime_error',
+      stdout: 'x'.repeat(200_000),
+      stderr: { unexpected: true },
+      compileOutput: 'compiler output',
+      message: 'm'.repeat(1000),
+      time: '15',
+      memory: -1,
+      exitCode: 1,
+      errorLine: 99,
+      errorLineConfidence: 'exact',
+      correctedCode: 'must not reach the learner',
+    },
+    'line one\nline two',
+  );
+
+  assert.equal(result.status, 'runtime_error');
+  assert.ok(Buffer.byteLength(result.stdout, 'utf8') <= 100_000);
+  assert.equal(result.stderr, '');
+  assert.ok(result.message.length <= 300);
+  assert.equal(result.time, null);
+  assert.equal(result.memory, null);
+  assert.equal(result.errorLine, null);
+  assert.equal(result.errorLineConfidence, 'unknown');
+  assert.equal('correctedCode' in result, false);
+});
+
+test('generic runner responses with an unknown status are rejected', () => {
+  const result = normalizeLiveProviderResult(
+    { status: 'corrected', stdout: 'ok', correctedCode: 'not allowed' },
+    'print("hello")',
+  );
+
+  assert.equal(result.status, 'internal_error');
+  assert.equal(result.stdout, '');
+  assert.equal('correctedCode' in result, false);
 });

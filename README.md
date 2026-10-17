@@ -123,7 +123,7 @@ codementor/
 ### Data flow
 
 1. The learner edits code in the browser. Autosave writes a local draft only — no run, no AI, and no account project is changed until explicit save.
-2. **Run Code** sends Python or JavaScript to a dedicated browser worker. Program execution stays in the browser; Python downloads its Pyodide runtime from jsDelivr. Stdin is supplied in **Program Input**. The local runner enforces a 50 KB source limit, a 10 KB input limit, a 45-second runtime bootstrap limit and a 3-second execution limit.
+2. **Run Code** sends Python or JavaScript to a dedicated browser worker. Program execution stays in the browser; Python downloads its Pyodide runtime from jsDelivr. Stdin is supplied in **Program Input**. The local runner enforces a 50 KB source limit, a 10 KB input limit, a 45-second runtime bootstrap limit, a 3-second execution limit and a 20,000-character cap for each output stream.
 3. The local analyzer runs **in the browser** and produces the `LocalAnalysis` object (summary, concepts, line explanations, errors, hints, tips, diagram, quiz readiness).
    Run results and local hints are separate: a successful execution can still have a potential edge-case hint. The UI labels it as a suggestion, not a failure from that run.
 4. The UI renders Analysis, Visuals and Quiz from that object.
@@ -227,7 +227,7 @@ The legacy interactive terminal is a separate Node service and uses E2B cloud sa
 
 `EXECUTION_PROVIDER=judge0` selects a built-in adapter for [Judge0 CE](https://ce.judge0.com), a keyless, open-source remote runner. The backend retains mappings for nine compiled languages for future/provider compatibility; the current learner interface exposes C, C++ and Java through the single-file Playground and multi-file execution. The adapter:
 
-- calls `POST /submissions?base64_encoded=false&wait=true` with `{ source_code, language_id, stdin }`;
+- calls `POST /submissions?base64_encoded=false&wait=true` with source, stdin, and explicit CPU, wall-time, memory, stack, process, file-size, single-run, and network-disabled limits;
 - maps all nine languages to verified Judge0 CE ids — `c → 103`, `cpp → 105`, `java → 91`, `csharp → 51`, `go → 107`, `php → 98`, `ruby → 72`, `rust → 108`, `kotlin → 111`;
 - maps Judge0's integer status ids onto CodeMentor's honest model (Accepted → `success`, Compilation Error → `compilation_error` with the reported line, Time Limit Exceeded → `time_limit_exceeded`, SIGSEGV/abort/… → `runtime_error`, Internal / Exec Format Error → `internal_error`);
 - reports peak memory (KB → bytes) and wall time (seconds → ms), and never invents a line when the diagnostic has none;
@@ -235,6 +235,10 @@ The legacy interactive terminal is a separate Node service and uses E2B cloud sa
 - shares one daily-limit + cooldown guard with every other provider, so the public runner's rate limit (roughly one request per second) never surfaces as the learner's error; a rate-limited response degrades to an honest `unavailable` with local guidance.
 
 > **Historical provider verification:** C, C++, Java, C#, Go, PHP, Ruby, Rust and Kotlin returned `status: "success"` with exact program output in earlier provider checks; a deliberately broken C program returned `status: "compilation_error"` with `errorLine: 2`. These backend checks do not mean every mapped language is currently exposed in the learner interface.
+
+Provider responses are streamed with a 2 MiB maximum body size, and learner-facing output is truncated to the configured byte budget before it is returned. Judge0 resource limits, including a request to disable network access, are included in each submission; the remote service must honor those settings, so self-hosted deployments should verify their Judge0 configuration and network isolation. Piston requests also set compile/run time and memory budgets. The default public CE service is an external dependency with its own policies and availability; never submit secrets in learner code.
+
+`EXECUTION_DAILY_LIMIT` and the execution cooldown are best-effort, in-memory limits shared only within one server process. They are not per-account quotas and are not atomic across replicas. The Express rate limiters are also process-local unless a shared store is configured; use shared, durable enforcement before relying on these limits for classroom-scale or multi-instance traffic.
 
 When configured, `GET /api/execution-capabilities` reports provider readiness for the backend's mapped languages after a real submission probe. The single-file Run button for C, C++ and Java is enabled only when the service reports that language ready; this status does not expand the learner-facing language menu.
 
@@ -348,7 +352,7 @@ AI is never called while typing, on page load, on tab switching, on theme/settin
 - The multi-file web preview runs in an `allow-scripts` iframe with external resources blocked, so preview code never shares the app's origin.
 - Safe error responses — no stack traces, no secret logging. Errors are logged by short label only.
 - Secrets live only in ignored environment files; `.env.example` files ship placeholders.
-- Browser-local Python/JavaScript runs use worker termination, code and input size limits and runtime timeouts; Python fetches its runtime from jsDelivr. Learner code can make its own network requests.
+- Browser-local Python/JavaScript runs use worker termination, code and input size limits, runtime timeouts and 20,000-character output caps; Python fetches its runtime from jsDelivr. Learner code can make its own network requests.
 - The optional legacy hosted terminal requires a signed-in session, same-origin WebSocket and CSRF validation; the API proxies to its E2B runner using a private shared secret.
 - Safe Mermaid; defensive `localStorage` handling.
 - A React error boundary wraps the whole app.
@@ -445,7 +449,7 @@ misrepresented.
 | Command | Result |
 | --- | --- |
 | `npm run check` | Passed — client and server TypeScript checks. |
-| `npm test` | Passed — 119 tests: 41 server, 62 client, and 16 runner tests. |
+| `npm test` | Passed — 144 tests across server (60), client (68), and runner (16); one Postgres integration test skipped because `DATABASE_URL` is not set. |
 | `npm run build` | Passed — production client bundle built; Vite reports existing large-chunk size warnings. |
 | `npm run db:generate` | Validates the schema and lists all 8 tables with their columns. |
 | `npm run db:migrate` | Applies the Postgres schema when a valid `DATABASE_URL` is available. |

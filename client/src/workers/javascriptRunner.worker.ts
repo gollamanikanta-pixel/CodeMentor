@@ -1,3 +1,5 @@
+import { BoundedOutputBuffer, boundOutputText } from './outputBuffer';
+
 type Request = { requestId: string; sourceCode: string; stdin: string };
 
 /**
@@ -79,8 +81,8 @@ async function handleRun(event: MessageEvent<Request>) {
     return raw;
   })();
   let inputIndex = 0;
-  const output: string[] = [];
-  const errors: string[] = [];
+  const output = new BoundedOutputBuffer();
+  const errors = new BoundedOutputBuffer();
 
   const render = (value: unknown): string =>
     typeof value === 'string'
@@ -93,12 +95,12 @@ async function handleRun(event: MessageEvent<Request>) {
           }
         })();
 
-  const write = (...values: unknown[]) => output.push(values.map(render).join(' '));
-  const writeError = (...values: unknown[]) => errors.push(values.map(render).join(' '));
+  const write = (...values: unknown[]) => output.write(values.map(render).join(' '));
+  const writeError = (...values: unknown[]) => errors.write(values.map(render).join(' '));
   const input = (prompt = '') => {
     if (inputIndex >= lines.length) return undefined;
     const value = lines[inputIndex++];
-    output.push(`${render(prompt)}${value}`);
+    output.write(`${render(prompt)}${value}`);
     return value;
   };
 
@@ -113,8 +115,8 @@ async function handleRun(event: MessageEvent<Request>) {
         self.postMessage({
           requestId: event.data.requestId,
           status: 'success',
-          stdout: output.join('\n'),
-          stderr: errors.join('\n'),
+          stdout: output.toString(),
+          stderr: errors.toString(),
           message: '',
           time: performance.now() - started,
           errorLine: null,
@@ -124,12 +126,12 @@ async function handleRun(event: MessageEvent<Request>) {
       .catch((error: unknown) => {
         const name = error instanceof Error ? error.name : 'Error';
         const description = error instanceof Error ? error.message : String(error);
-        const text = `${name}: ${description}`;
+        const text = boundOutputText(`${name}: ${description}`);
         const errorLine = error instanceof Error ? parseErrorLocation(error.stack, lineOffset) : null;
         self.postMessage({
           requestId: event.data.requestId,
           status: 'runtime_error',
-          stdout: output.join('\n'),
+          stdout: output.toString(),
           stderr: text,
           message: text,
           time: performance.now() - started,
@@ -148,7 +150,7 @@ async function handleRun(event: MessageEvent<Request>) {
     self.postMessage({
       requestId: event.data.requestId,
       status: 'syntax_error',
-      stdout: output.join('\n'),
+      stdout: output.toString(),
       stderr: text,
       message: text,
       time: performance.now() - started,

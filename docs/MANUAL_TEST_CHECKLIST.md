@@ -31,6 +31,7 @@ row says otherwise.
 - [ ] Mobile: panels stack, no horizontal scrolling, the sidebar starts collapsed, buttons stay tappable (44px+).
 - [ ] No horizontal overflow at 760–900px: the account name and breadcrumbs drop out of the top bar before the single-column mobile layout takes over.
 - [ ] At ≤560px the project bar and editor toolbar wrap instead of clipping their controls.
+- [ ] At 561–840px the expanded AI chat stays clear of the primary Run Code action; on taller desktop viewports it stays below the run controls; at ≤560px width or ≤680px height it starts minimized.
 - [ ] The editor card and analysis panel each hug their own content (no large empty bordered panel when one column is taller).
 - [ ] Both themes stay consistent: cards keep a faint top sheen, the console reads as a darker terminal well with a cyan prompt, and the diagram frame shows a soft cyan aura on hover.
 
@@ -48,6 +49,7 @@ row says otherwise.
 - [ ] Introduce a `NameError` → console **Errors** tab shows it and the analyzer adds a learning error.
 - [ ] Introduce a syntax error (e.g. a missing parenthesis) → `syntax_error` with a possible line.
 - [ ] Write an infinite loop → times out after ~3s and the worker is terminated (page stays responsive).
+- [ ] Print more than 20,000 characters to stdout and stderr → each stream stays bounded and shows a truncation notice.
 - [ ] Enter code larger than 50 KB → blocked with a safe message.
 
 ## 5. JavaScript runner
@@ -57,6 +59,7 @@ row says otherwise.
 - [ ] `input()` reads stdin lines.
 - [ ] Throwing an error reports `runtime_error` in well under a second.
 - [ ] Infinite loop times out after ~3s.
+- [ ] Print more than 20,000 characters to stdout and stderr → each stream stays bounded and shows a truncation notice.
 
 ## 6. Errors & Learning Hints
 
