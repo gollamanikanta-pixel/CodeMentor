@@ -1954,6 +1954,17 @@ a:focus-visible,
   border-color: rgba(94, 211, 161, 0.24);
 }
 
+.analysis-run-note {
+  margin: -2px 0 14px;
+  padding: 11px 13px;
+  border: 1px solid rgba(94, 211, 161, 0.24);
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  background: var(--green-wash);
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+
 .summary-icon {
   width: 30px;
   height: 30px;

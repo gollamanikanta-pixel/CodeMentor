@@ -125,6 +125,7 @@ codementor/
 1. The learner edits code in the browser. Autosave writes a local draft only — no run, no AI, and no account project is changed until explicit save.
 2. **Run Code** sends Python or JavaScript to a dedicated browser worker. Program execution stays in the browser; Python downloads its Pyodide runtime from jsDelivr. Stdin is supplied in **Program Input**. The local runner enforces a 50 KB source limit, a 10 KB input limit, a 45-second runtime bootstrap limit and a 3-second execution limit.
 3. The local analyzer runs **in the browser** and produces the `LocalAnalysis` object (summary, concepts, line explanations, errors, hints, tips, diagram, quiz readiness).
+   Run results and local hints are separate: a successful execution can still have a potential edge-case hint. The UI labels it as a suggestion, not a failure from that run.
 4. The UI renders Analysis, Visuals and Quiz from that object.
 5. **Ask AI for Deeper Help** is the only automatic-free path to the backend. The browser POSTs one combined context; the backend hashes it, serves a cache hit for free, or calls the provider once.
 6. Other backend calls are explicit and account-scoped: signing in, saving Playground or multi-file project source, recording quiz results, and (for multi-file project execution) using the configured execution provider.
