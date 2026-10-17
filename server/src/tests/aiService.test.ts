@@ -4,6 +4,7 @@ import {
   callWithOutputRepair,
   geminiOpenAiEndpoint,
   isGeminiOpenAiCompatible,
+  parseChatProviderResponse,
   parseProviderResponse,
   providerFailureMessage,
   ProviderOutputError,
@@ -69,6 +70,31 @@ test('parseProviderResponse reads OpenAI-compatible JSON responses', () => {
   );
   assert.equal(response.summary, validGuidance.summary);
   assert.equal(response.deeperExplanation, validGuidance.deeperExplanation);
+});
+
+test('parseChatProviderResponse reads native Gemini and OpenAI-compatible text replies', () => {
+  assert.equal(
+    parseChatProviderResponse(
+      { candidates: [{ content: { parts: [{ text: 'A Gemini chat reply.' }] } }] },
+      true,
+    ),
+    'A Gemini chat reply.',
+  );
+  assert.equal(
+    parseChatProviderResponse(
+      { choices: [{ message: { content: 'An OpenAI-compatible chat reply.' } }] },
+      false,
+    ),
+    'An OpenAI-compatible chat reply.',
+  );
+});
+
+test('parseChatProviderResponse rejects empty or malformed replies', () => {
+  assert.throws(() => parseChatProviderResponse({ choices: [] }, false), ProviderOutputError);
+  assert.throws(
+    () => parseChatProviderResponse({ choices: [{ message: { content: '   ' } }] }, false),
+    ProviderOutputError,
+  );
 });
 
 test('Gemini OpenAI-compatible URLs use the chat completions endpoint', () => {

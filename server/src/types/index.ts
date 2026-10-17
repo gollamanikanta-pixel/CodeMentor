@@ -57,3 +57,18 @@ export type DeepAnalyzeInput = {
   hintLevel?: string;
   sections?: string[];
 };
+
+export type AiChatMessage = {
+  role: 'user' | 'assistant';
+  content: string;
+};
+
+export type AiChatInput = {
+  source: string;
+  language: string;
+  messages: AiChatMessage[];
+  execution?: Record<string, unknown> | null;
+  localAnalysis?: Record<string, unknown> | null;
+  explanationLevel?: string;
+  hintLevel?: string;
+};

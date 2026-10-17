@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { deepAnalyzeSchema, runSchema } from '../validators/requestSchemas.js';
+import { aiChatSchema, deepAnalyzeSchema, runSchema } from '../validators/requestSchemas.js';
 import { TtlCache } from '../cache/ttlCache.js';
 import { stableHash, stableStringify, truncate } from '../utils/hash.js';
 
@@ -34,6 +34,42 @@ test('deepAnalyzeSchema bounds the AI context and sections', () => {
   assert.ok(ok.success);
   assert.ok(!deepAnalyzeSchema.safeParse({ language: 'Python', source: ''.padEnd(12001, 'x') }).success);
   assert.ok(!deepAnalyzeSchema.safeParse({ language: 'Python', source: 'x', sections: ['bogus'] }).success);
+});
+
+test('aiChatSchema bounds requests and requires alternating messages ending with the learner', () => {
+  const valid = aiChatSchema.safeParse({
+    language: 'Python',
+    source: 'print(1)',
+    messages: [
+      { role: 'user', content: 'What does this print?' },
+      { role: 'assistant', content: 'It prints the number 1.' },
+      { role: 'user', content: 'Why?' },
+    ],
+    explanationLevel: 'Beginner',
+    hintLevel: 'Guided',
+  });
+  assert.ok(valid.success);
+  assert.ok(!aiChatSchema.safeParse({ language: 'Python', source: 'x', messages: [] }).success);
+  assert.ok(!aiChatSchema.safeParse({
+    language: 'Python',
+    source: 'x',
+    messages: [{ role: 'user', content: 'first' }, { role: 'user', content: 'second' }],
+  }).success);
+  assert.ok(!aiChatSchema.safeParse({
+    language: 'Python',
+    source: 'x',
+    messages: [{ role: 'assistant', content: 'answer' }, { role: 'user', content: 'question' }],
+  }).success);
+  assert.ok(!aiChatSchema.safeParse({
+    language: 'Python',
+    source: 'x',
+    messages: [{ role: 'user', content: 'question' }, { role: 'assistant', content: 'answer' }],
+  }).success);
+  assert.ok(!aiChatSchema.safeParse({
+    language: 'Python',
+    source: 'x',
+    messages: [{ role: 'user', content: 'x'.repeat(4001) }],
+  }).success);
 });
 
 test('TtlCache expires entries after their TTL', async () => {

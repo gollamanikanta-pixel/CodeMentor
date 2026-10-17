@@ -43,6 +43,20 @@ export function requestDeepHelp(payload: DeepHelpPayload) {
   return postJson<DeepAnalysis>('/api/deep-analyze', payload);
 }
 
+export type AiChatMessage = { role: 'user' | 'assistant'; content: string };
+
+export function requestAiChat(payload: {
+  source: string;
+  language: LanguageName;
+  messages: AiChatMessage[];
+  execution?: ExecutionResult | null;
+  localAnalysis?: LocalAnalysis | null;
+  explanationLevel?: string;
+  hintLevel?: string;
+}) {
+  return postJson<{ reply: string }>('/api/ai-chat', payload);
+}
+
 export function requestSecureRun(payload: { source: string; stdin: string; language: string }, signal?: AbortSignal) {
   return postJson<ExecutionResult>('/api/run', payload, signal);
 }
