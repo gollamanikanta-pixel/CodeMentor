@@ -11,12 +11,12 @@ import { normalizeJudge0Run } from '../providers/judge0Normalizer.js';
 
 test('normalizeJudge0Run maps an accepted run to success and converts units', () => {
   const result = normalizeJudge0Run(
-    { status: { id: 3, description: 'Accepted' }, stdout: 'ok\n', stderr: '', time: '0.031', memory: 12804, exit_code: 0 },
+    { status: { id: 3, description: 'Accepted' }, stdout: 'ok\n', stderr: '', time: '0.031', memory: 12804 },
     40,
   );
   assert.equal(result.status, 'success');
   assert.equal(result.stdout, 'ok\n');
-  assert.equal(result.exitCode, 0);
+  assert.equal(result.exitCode, null);
   // Judge0 reports seconds -> milliseconds.
   assert.equal(result.time, 31);
   // Judge0 reports kilobytes -> bytes.

@@ -157,7 +157,7 @@ async function runJudge0Probe(language: string): Promise<{ ok: boolean; message:
       return { ok: false, message: detail || `The runner responded ${response.status}.` };
     }
     const result = await readBoundedJson<Judge0Response>(response, MAX_PROVIDER_RESPONSE_BYTES);
-    if (result.status?.id === 3 && result.exit_code === 0) {
+    if (result.status?.id === 3) {
       return { ok: true, message: `${language} execution probe succeeded.` };
     }
     const detail =
