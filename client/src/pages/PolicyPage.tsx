@@ -7,11 +7,11 @@ const CONTENT = {
     eyebrow: 'PRIVACY',
     title: 'Privacy at CodeMentor AI',
     intro:
-      'CodeMentor AI keeps drafts and local learning tools in your browser. When you run a console program, its source is sent to the self-hosted runner you configure.',
+      'CodeMentor AI keeps drafts and local learning tools in your browser. Only secure remote runs send source to the configured execution provider.',
     sections: [
       {
         heading: 'What stays on your machine',
-        body: 'Your editor draft, local analysis, quiz history and preferences live in your browser storage. Python and JavaScript run in local browser workers. C, C++, and Java source and input are sent to the configured isolated execution provider only when you click Run Code. Optional hosted interactive sessions are separate from the Playground run path. HTML previews remain in a sandboxed browser iframe.',
+        body: 'Your editor draft, local analysis, quiz history and preferences live in your browser storage. Python runs in a browser worker; JavaScript runs in a worker inside a network-restricted, opaque-origin sandbox iframe. Neither is sent to a remote execution service. C, C++, and Java source and input are sent to the configured isolated execution provider only when you click Run Code. Optional hosted interactive sessions are separate from the Playground run path. HTML previews remain in a separate sandboxed browser iframe.',
       },
       {
         heading: 'What an account stores',

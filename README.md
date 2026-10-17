@@ -11,7 +11,7 @@ CodeMentor **guides, it never auto-fixes**. It explains errors, highlights likel
 ## 1. Features
 
 - **Playground workspace** — collapsible sidebar, Monaco editor, analysis panel, bottom console, and a sticky action toolbar.
-- **Console runners** — Python and JavaScript run in browser workers; CodeMentor does not send their source to a remote execution service. C, C++ and Java run through the configured isolated execution service when each language is reported ready. Their source and stdin are sent only after the learner chooses **Run Code**. Python downloads Pyodide from jsDelivr, and learner programs may make their own network requests. HTML uses a sandboxed browser preview.
+- **Console runners** — Python runs in a browser worker and JavaScript runs in a dedicated worker created inside a network-restricted, opaque-origin sandbox frame; CodeMentor does not send their source to a remote execution service. C, C++ and Java run through the configured isolated execution service when each language is reported ready. Their source and stdin are sent only after the learner chooses **Run Code**. Python downloads Pyodide from jsDelivr, and Python programs may make their own network requests. HTML uses a sandboxed browser preview.
 - **Local analysis** — rule-based guidance runs locally without AI, network access or code rewriting. Analyzer code for coming-soon languages remains internal and is not exposed as a supported language choice.
 - **Errors & Learning Hints** — category badge, likely line with confidence, technical message, what happened, why, progressive hints, concept reminder, self-check question and debugging steps.
 - **Local visuals** — accessible SVG data-structure diagrams plus safe Mermaid flowcharts generated from detected structure.
@@ -52,6 +52,8 @@ codementor/
 │  ├─ vite.config.ts               # dev proxy: /api -> localhost:5000
 │  ├─ package.json
 │  ├─ tsconfig.json
+│  ├─ public/
+│  │  └─ javascript-runner.html  # opaque-origin JavaScript sandbox
 │  ├─ tests/                       # node:test unit tests (run via tsx)
 │  │  ├─ localAnalyzer.test.ts
 │  │  └─ localQuiz.test.ts
@@ -89,7 +91,7 @@ codementor/
 │     ├─ settings/                 # defaults + SettingsContext
 │     ├─ storage/localStorage.ts   # versioned keys + safe clearing
 │     ├─ types/index.ts
-│     └─ workers/                  # pythonRunner.worker.ts, javascriptRunner.worker.ts
+│     └─ workers/                  # pythonRunner.worker.ts
 ├─ server/                         # Node + Express + TypeScript API
 │  ├─ tsconfig.json
 │  ├─ package.json
@@ -123,7 +125,7 @@ codementor/
 ### Data flow
 
 1. The learner edits code in the browser. Autosave writes a local draft only — no run, no AI, and no account project is changed until explicit save.
-2. **Run Code** sends Python or JavaScript to a dedicated browser worker. Program execution stays in the browser; Python downloads its Pyodide runtime from jsDelivr. Stdin is supplied in **Program Input**. The local runner enforces a 50 KB source limit, a 10 KB input limit, a 45-second runtime bootstrap limit, a 3-second execution limit and a 20,000-character cap for each output stream.
+2. **Run Code** executes Python in a dedicated browser worker and JavaScript in a dedicated worker created inside a network-restricted, opaque-origin sandbox frame. Program execution stays in the browser; Python downloads its Pyodide runtime from jsDelivr. Stdin is supplied in **Program Input**. The local runner enforces a 50 KB source limit, a 10 KB input limit, a 45-second runtime bootstrap limit, a 3-second execution limit and a 20,000-character cap for each output stream.
 3. The local analyzer runs **in the browser** and produces the `LocalAnalysis` object (summary, concepts, line explanations, errors, hints, tips, diagram, quiz readiness).
    Run results and local hints are separate: a successful execution can still have a potential edge-case hint. The UI labels it as a suggestion, not a failure from that run.
 4. The UI renders Analysis, Visuals and Quiz from that object.
@@ -204,7 +206,7 @@ One file, `client/src/data/languages.ts`, is the single source of truth. Each en
 
 | Group | Languages | Execution | Local analysis |
 | --- | --- | --- | --- |
-| Available local console languages | Python, JavaScript | Yes — local browser workers; stdin is supplied before the run | Yes |
+| Available local console languages | Python, JavaScript | Yes — browser-local isolated runners; stdin is supplied before the run | Yes |
 | Available secure remote console languages | C, C++, Java | Yes when the configured isolated runner reports the language ready; source and stdin are sent only after Run Code | Structural guidance |
 | Sandboxed preview | HTML | Yes — isolated iframe (Run Preview) | Yes |
 | Coming soon | TypeScript, SQL, C#, Go, PHP, Ruby, Rust, Kotlin | Not selectable or runnable in the learner interface | Not advertised |
@@ -215,7 +217,7 @@ Coming-soon source files are not accepted by the single-file Playground upload. 
 
 ## 7. Local browser runners
 
-Python and JavaScript run in dedicated Web Workers and do not use the hosted terminal service. Supply input in the Playground's **Program Input** panel before running. Python loads a pinned Pyodide runtime from jsDelivr on first use; later runs reuse it for that page session. Source and input are not uploaded by the runner, but learner programs can access browser network APIs, so do not put secrets in code.
+Python and JavaScript run locally in the browser and do not use the hosted terminal service. Supply input in the Playground's **Program Input** panel before running. Python runs in a Web Worker and loads a pinned Pyodide runtime from jsDelivr on first use; Python code may make its own network requests. JavaScript runs in a dedicated worker created by an `allow-scripts` iframe without `allow-same-origin`; the worker inherits the iframe's opaque origin and restrictive CSP, blocking network connections and external resources. Neither runner uploads source or input to a remote execution service.
 
 ## 8. Secure remote execution
 
@@ -352,7 +354,7 @@ AI is never called while typing, on page load, on tab switching, on theme/settin
 - The multi-file web preview runs in an `allow-scripts` iframe with external resources blocked, so preview code never shares the app's origin.
 - Safe error responses — no stack traces, no secret logging. Errors are logged by short label only.
 - Secrets live only in ignored environment files; `.env.example` files ship placeholders.
-- Browser-local Python/JavaScript runs use worker termination, code and input size limits, runtime timeouts and 20,000-character output caps; Python fetches its runtime from jsDelivr. Learner code can make its own network requests.
+- Browser-local Python/JavaScript runs use runner termination, code and input size limits, runtime timeouts and 20,000-character output caps. JavaScript uses a worker created in an opaque-origin iframe with `connect-src 'none'` and external resources blocked; Python fetches its runtime from jsDelivr and Python code can make its own network requests.
 - The optional legacy hosted terminal requires a signed-in session, same-origin WebSocket and CSRF validation; the API proxies to its E2B runner using a private shared secret.
 - Safe Mermaid; defensive `localStorage` handling.
 - A React error boundary wraps the whole app.
@@ -394,8 +396,8 @@ Supabase Postgres for account-backed data. Follow the full setup and
 verification steps in [`docs/DEPLOY_VERCEL_SUPABASE.md`](docs/DEPLOY_VERCEL_SUPABASE.md).
 Vercel serverless functions do not support the long-lived WebSocket connection
 used by the legacy interactive terminal. Python and JavaScript now run in
-browser workers without that service; single-request secure-run endpoints for
-multi-file projects remain separate.
+isolated browser runtimes without that service; single-request secure-run
+endpoints for multi-file projects remain separate.
 
 ## 13. Testing
 
@@ -466,7 +468,7 @@ misrepresented.
 - Settings API: `GET`/`PUT /api/settings` round-trip, and signing in adopts the account's saved theme (verified: server `light` applied on login).
 - Cancel endpoint answers honestly (`Execution job not found.` for an unknown id).
 - **Spec-parity audit (before the interactive-runner change):** historical browser checks covered the prior execution flow. The current interactive flow authenticates the signed-in session, Origin and CSRF token; the API proxies to a separately authenticated runner.
-- **Current single-file runner validation:** Python and JavaScript use browser workers; automated client tests and the production build pass. Confirm first-use Pyodide loading from jsDelivr in the target browser.
+- **Current single-file runner validation:** Python uses a browser worker and JavaScript uses a network-restricted sandbox frame; automated client tests and the production build pass. Confirm first-use Pyodide loading from jsDelivr in the target browser.
 
 **Previous remote-provider verification (multi-file execution)**
 

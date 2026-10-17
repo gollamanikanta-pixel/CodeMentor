@@ -112,10 +112,11 @@ row says otherwise.
 
 ## 12. Available runners
 
-- [ ] Python and JavaScript run in browser workers without a hosted execution service.
+- [ ] Python and JavaScript run locally without a hosted execution service; JavaScript runs in an opaque-origin iframe with network access blocked.
 - [ ] Python loads Pyodide from jsDelivr on first use and reports a clear error if runtime bootstrap fails.
 - [ ] Program Input values are echoed and consumed in order; multiple values and missing input behave predictably.
-- [ ] Syntax/runtime errors report useful output; infinite loops time out and Stop terminates the worker.
+- [ ] Syntax/runtime errors report useful output; infinite loops time out and Stop terminates the active worker or sandbox frame.
+- [ ] JavaScript cannot read the app DOM, cookies, or storage, and attempts to use fetch, WebSocket, images, forms, or nested frames are blocked.
 - [ ] C, C++, and Java show the secure-runner readiness state and run from the single-file Playground only when their capability is ready.
 - [ ] C, C++, and Java source and stdin are sent to the configured isolated service only after the learner chooses Run Code.
 - [ ] A deliberately broken C program (a missing `;`) returns `compilation_error` with the compiler output and the reported line — a learning signal, never a fix or a patch.

@@ -545,7 +545,9 @@ export function PlaygroundPage() {
             : canRun
             ? secureRemoteLanguage
               ? `${language} source code and input are sent to the configured isolated execution service only when you choose Run Code. `
-              : `${language} runs in a local browser worker, not a remote execution service. Your code can make its own network requests.${language === 'Python' ? ' Python downloads its runtime from jsDelivr.' : ''} `
+              : language === 'JavaScript'
+                ? 'JavaScript runs in an isolated browser sandbox; network connections and external resources are blocked. '
+                : 'Python runs in a local browser worker, not a remote execution service. Your code can make its own network requests. Python downloads its runtime from jsDelivr. '
             : `${statusDescription} `}
           Use Local Guidance First. Local analysis does not send source to an AI service.
         </span>

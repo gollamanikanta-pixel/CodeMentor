@@ -7,10 +7,11 @@ There is no `child_process`, `exec`, `spawn`, `fork`, shell command, local
 compiler, or Docker execution path anywhere on the server. Compiled languages are
 delegated to a vetted remote provider through `SecureExecutionProvider`.
 
-The single intentional exception in the whole project is the **JavaScript browser
-worker**, which compiles the learner's code with the `Function` constructor — the
-only way to run JavaScript locally. It lives in an isolated worker with no DOM or
-network access, never in the React UI, and never on the backend.
+The local JavaScript runner compiles learner code with the `Function`
+constructor in a dedicated worker created by an `allow-scripts` iframe without
+`allow-same-origin`. The worker inherits the frame's opaque origin and
+restrictive CSP, which block access to app data and network connections. It
+never runs in the React UI or on the backend.
 
 ## Authentication
 
@@ -63,6 +64,18 @@ the database query is the source of truth.
   visible notice explains why.
 - The parent accepts `postMessage` only from the active iframe window, only with
   a matching run ID, and renders received text as text only.
+
+## JavaScript console runner
+
+- Learner JavaScript runs in a separate iframe with `sandbox="allow-scripts"` —
+  **no** `allow-same-origin`, forms, popups, or top-level navigation.
+- The runner document applies a restrictive CSP with `connect-src 'none'` and
+  blocks images, media, nested frames, forms, and external resources; only its
+  own blob-backed worker is allowed.
+- Source and stdin are transferred as data over a private `MessageChannel`; they
+  are never interpolated into the runner document. The parent validates runner
+  responses and caps output before displaying it.
+- The iframe is removed after completion, cancellation, or timeout.
 
 ## Secrets
 

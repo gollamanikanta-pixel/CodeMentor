@@ -16,21 +16,118 @@ type WorkerMessage = Partial<Omit<ExecutionResult, 'status'>> & {
   message?: string;
 };
 
-function createWorker(language: RunnableLanguage): Worker {
+type RunRequest = { requestId: string; sourceCode: string; stdin: string };
+
+type ExecutionRunner = {
+  onmessage: ((event: MessageEvent<WorkerMessage>) => void) | null;
+  onerror: ((event: ErrorEvent) => void) | null;
+  postMessage: (message: RunRequest) => void;
+  terminate: () => void;
+};
+
+const RUNNER_STATUSES = new Set<string>([
+  'preparing',
+  'running',
+  'success',
+  'syntax_error',
+  'compilation_error',
+  'runtime_error',
+  'timeout',
+  'time_limit_exceeded',
+  'memory_limit_exceeded',
+  'cancelled',
+  'internal_error',
+  'unavailable',
+]);
+
+function isWorkerMessage(value: unknown): value is WorkerMessage {
+  if (!value || typeof value !== 'object') return false;
+  const message = value as Record<string, unknown>;
+  return (
+    typeof message.status === 'string' &&
+    RUNNER_STATUSES.has(message.status) &&
+    (message.stdout === undefined || typeof message.stdout === 'string') &&
+    (message.stderr === undefined || typeof message.stderr === 'string') &&
+    (message.message === undefined || typeof message.message === 'string') &&
+    (message.time === undefined || message.time === null || typeof message.time === 'number') &&
+    (message.errorLine === undefined || message.errorLine === null || typeof message.errorLine === 'number')
+  );
+}
+
+function createRunner(language: RunnableLanguage): ExecutionRunner {
   if (language === 'Python') {
     return new Worker(new URL('../workers/pythonRunner.worker.ts', import.meta.url), {
       type: 'module',
     });
   }
-  return new Worker(new URL('../workers/javascriptRunner.worker.ts', import.meta.url), {
-    type: 'module',
-  });
+
+  const frame = document.createElement('iframe');
+  frame.title = 'Isolated JavaScript runner';
+  frame.setAttribute('sandbox', 'allow-scripts');
+  frame.tabIndex = -1;
+  frame.hidden = true;
+
+  let loaded = false;
+  let terminated = false;
+  let pendingRequest: RunRequest | null = null;
+  let replyPort: MessagePort | null = null;
+  const runner: ExecutionRunner = {
+    onmessage: null,
+    onerror: null,
+    postMessage: (message) => {
+      pendingRequest = message;
+      startIfReady();
+    },
+    terminate: () => {
+      terminated = true;
+      pendingRequest = null;
+      replyPort?.close();
+      replyPort = null;
+      frame.onload = null;
+      frame.onerror = null;
+      frame.remove();
+    },
+  };
+
+  const startIfReady = () => {
+    if (!loaded || !pendingRequest || terminated || !frame.contentWindow) return;
+
+    const channel = new MessageChannel();
+    replyPort = channel.port1;
+    replyPort.onmessage = (event: MessageEvent<unknown>) => {
+      if (!isWorkerMessage(event.data)) {
+        runner.onerror?.(new ErrorEvent('error', { message: 'Invalid sandbox response.' }));
+        return;
+      }
+      runner.onmessage?.(
+        new MessageEvent<WorkerMessage>('message', {
+          data: {
+            ...event.data,
+            stdout: event.data.stdout?.slice(0, 20_000),
+            stderr: event.data.stderr?.slice(0, 20_000),
+            message: event.data.message?.slice(0, 20_000),
+          },
+        }),
+      );
+    };
+    frame.contentWindow.postMessage({ type: 'run', ...pendingRequest }, '*', [channel.port2]);
+    pendingRequest = null;
+  };
+
+  frame.onload = () => {
+    loaded = true;
+    startIfReady();
+  };
+  frame.onerror = () => runner.onerror?.(new ErrorEvent('error', { message: 'Sandbox failed to load.' }));
+  frame.src = new URL('/javascript-runner.html', window.location.href).href;
+  document.body.append(frame);
+
+  return runner;
 }
 
 /**
- * Runs learner code in a dedicated browser worker. The worker is always
- * terminated afterwards — on success, error or timeout — so no long-running
- * student code can keep the page busy.
+ * Runs Python in a dedicated worker and JavaScript in a network-restricted,
+ * opaque-origin sandbox. The runner is always terminated after each run.
  */
 export async function runBrowserCode(
   language: RunnableLanguage,
@@ -66,7 +163,7 @@ export async function runBrowserCode(
     };
   }
 
-  const worker = createWorker(language);
+  const worker = createRunner(language);
 
   return new Promise<ExecutionResult>((resolve) => {
     if (signal?.aborted) {
@@ -124,6 +221,19 @@ export async function runBrowserCode(
 
     worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
       const data = event.data;
+      if (!isWorkerMessage(data)) {
+        finish({
+          status: 'internal_error',
+          stdout: '',
+          stderr: '',
+          message: 'The local runner returned an invalid response.',
+          time: null,
+          errorLine: null,
+          errorLineConfidence: 'unknown',
+          executionMode,
+        });
+        return;
+      }
 
       if (data.status === 'preparing') {
         onProgress?.('preparing', data.message ?? 'Preparing runtime…');
@@ -149,7 +259,7 @@ export async function runBrowserCode(
       }
 
       finish({
-        status: data.status as RunStatus,
+        status: data.status,
         stdout: data.stdout ?? '',
         stderr: data.stderr ?? '',
         message: data.message ?? '',

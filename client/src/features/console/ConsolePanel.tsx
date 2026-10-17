@@ -227,13 +227,15 @@ export function ConsolePanel({
             </span>
             <span>
               Source:{' '}
-              {visibleExecution?.executionMode === 'browser_python' || visibleExecution?.executionMode === 'browser_javascript'
+              {visibleExecution?.executionMode === 'browser_python'
                 ? 'local browser worker; not sent to a remote execution service'
+                : visibleExecution?.executionMode === 'browser_javascript'
+                  ? 'network-restricted browser sandbox; not sent to a remote execution service'
                 : visibleExecution?.executionMode === 'interactive_hosted'
                   ? 'isolated E2B cloud sandbox; source is sent to the configured runner service'
                   : visibleExecution?.executionMode === 'secure_remote'
                     ? 'configured secure runner'
-                    : 'local browser worker'}
+                    : 'local browser runner'}
               {visibleExecution?.executionMode === 'interactive_hosted'
                 ? ' · Interactive runner limits: 200 KB output · 60s'
                 : null}

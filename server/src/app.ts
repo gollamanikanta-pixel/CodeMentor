@@ -41,7 +41,7 @@ app.use(
             objectSrc: ["'none'"],
             mediaSrc: ["'self'"],
             workerSrc: ["'self'", 'blob:'],
-            frameSrc: ["'none'"],
+            frameSrc: ["'self'"],
           },
         }
       : false,

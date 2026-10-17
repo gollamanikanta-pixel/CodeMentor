@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' blob:; connect-src 'none'; img-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; worker-src blob:; base-uri 'none'; form-action 'none'"
+    >
+    <meta name="referrer" content="no-referrer">
+    <title>JavaScript runner</title>
+  </head>
+  <body>
+    <script>
+      (() => {
+        const workerSource = String.raw`
+          const MAX_OUTPUT_CHARS = 20000;
+          const PRELUDE = '"use strict"; return (async () => {';
+          const GENERATED_FRAME = /<anonymous>:(\d+):(\d+)/;
+          const ANY_FRAME = /:(\d+):(\d+)\s*$/m;
+          const FALLBACK_LINE_OFFSET = 3;
+          const now = performance.now.bind(performance);
+
+          function lineOffset() {
+            try {
+              const factory = new Function('console', 'input', PRELUDE + '\nthrow new Error("__line_probe__");\n})();');
+              return Promise.resolve(factory({ log() {} }, () => '')).then(
+                () => ({ offset: FALLBACK_LINE_OFFSET, measured: false }),
+                (error) => {
+                  const stack = error instanceof Error ? error.stack : '';
+                  const match = stack ? GENERATED_FRAME.exec(stack) : null;
+                  return match
+                    ? { offset: Number(match[1]) - 1, measured: true }
+                    : { offset: FALLBACK_LINE_OFFSET, measured: false };
+                },
+              );
+            } catch {
+              return Promise.resolve({ offset: FALLBACK_LINE_OFFSET, measured: false });
+            }
+          }
+
+          function errorLine(stack, resolvedOffset) {
+            if (!stack) return null;
+            const match = GENERATED_FRAME.exec(stack) ?? (resolvedOffset.measured ? null : ANY_FRAME.exec(stack));
+            if (!match) return null;
+            const line = Number(match[1]) - resolvedOffset.offset;
+            return line > 0 ? line : null;
+          }
+
+          function render(value) {
+            if (typeof value === 'string') return value;
+            try {
+              const result = JSON.stringify(value);
+              return result === undefined ? String(value) : result;
+            } catch {
+              return String(value);
+            }
+          }
+
+          function createOutput() {
+            let value = '';
+            let truncated = false;
+            return {
+              write(text) {
+                if (value.length >= MAX_OUTPUT_CHARS) {
+                  truncated = true;
+                  return;
+                }
+                const available = MAX_OUTPUT_CHARS - value.length;
+                value += text.slice(0, available);
+                if (text.length > available) truncated = true;
+              },
+              toString() {
+                return value + (truncated ? '\n[output truncated]' : '');
+              },
+            };
+          }
+
+          function disableNestedWorkers() {
+            try {
+              for (const constructor of ['Worker', 'SharedWorker']) {
+                Object.defineProperty(self, constructor, { value: undefined, configurable: false, writable: false });
+              }
+              return true;
+            } catch {
+              return false;
+            }
+          }
+
+          function run(data, port) {
+            const requestId = data.requestId;
+            const sourceCode = data.sourceCode;
+            const stdin = data.stdin;
+            if (
+              typeof requestId !== 'string' ||
+              typeof sourceCode !== 'string' ||
+              typeof stdin !== 'string' ||
+              sourceCode.length > 51200 ||
+              stdin.length > 10240
+            ) {
+              port.postMessage({
+                requestId,
+                status: 'internal_error',
+                stdout: '',
+                stderr: '',
+                message: 'The JavaScript runner received invalid input.',
+                time: null,
+                errorLine: null,
+                errorLineConfidence: 'unknown',
+              });
+              port.close();
+              self.close();
+              return;
+            }
+
+            const started = now();
+            const stdout = createOutput();
+            const stderr = createOutput();
+            const lines = stdin.split(/\r?\n/);
+            if (lines.length && lines[lines.length - 1] === '') lines.pop();
+            let inputIndex = 0;
+            let finished = false;
+            const send = (result) => {
+              if (finished) return;
+              finished = true;
+              port.postMessage({ requestId, ...result });
+              port.close();
+              self.close();
+            };
+            const write = (target, values) => target.write(values.map(render).join(' '));
+            const consoleApi = {
+              log: (...values) => write(stdout, values),
+              info: (...values) => write(stdout, values),
+              warn: (...values) => write(stderr, values),
+              error: (...values) => write(stderr, values),
+            };
+            const input = (prompt = '') => {
+              if (inputIndex >= lines.length) return undefined;
+              const value = lines[inputIndex++];
+              stdout.write(render(prompt) + value);
+              return value;
+            };
+
+            port.postMessage({ requestId, status: 'running', message: 'Running your program…' });
+            void lineOffset().then((resolvedOffset) => {
+              if (!disableNestedWorkers()) {
+                send({
+                  status: 'internal_error',
+                  stdout: stdout.toString(),
+                  stderr: '',
+                  message: 'The JavaScript runner could not restrict nested workers.',
+                  time: now() - started,
+                  errorLine: null,
+                  errorLineConfidence: 'unknown',
+                });
+                return;
+              }
+              try {
+                const factory = new Function('console', 'input', PRELUDE + '\n' + sourceCode + '\n})();');
+                Promise.resolve(factory(consoleApi, input)).then(
+                  () =>
+                    send({
+                      status: 'success',
+                      stdout: stdout.toString(),
+                      stderr: stderr.toString(),
+                      message: '',
+                      time: now() - started,
+                      errorLine: null,
+                      errorLineConfidence: 'unknown',
+                    }),
+                  (error) => {
+                    const name = error instanceof Error ? error.name : 'Error';
+                    const description = error instanceof Error ? error.message : String(error);
+                    const text = (name + ': ' + description).slice(0, MAX_OUTPUT_CHARS);
+                    const line = error instanceof Error ? errorLine(error.stack, resolvedOffset) : null;
+                    send({
+                      status: 'runtime_error',
+                      stdout: stdout.toString(),
+                      stderr: text,
+                      message: text,
+                      time: now() - started,
+                      errorLine: line,
+                      errorLineConfidence: line ? 'estimated' : 'unknown',
+                    });
+                  },
+                );
+              } catch (error) {
+                const text = error instanceof Error ? error.name + ': ' + error.message : String(error);
+                send({
+                  status: 'syntax_error',
+                  stdout: stdout.toString(),
+                  stderr: text.slice(0, MAX_OUTPUT_CHARS),
+                  message: text.slice(0, MAX_OUTPUT_CHARS),
+                  time: now() - started,
+                  errorLine: null,
+                  errorLineConfidence: 'unknown',
+                });
+              }
+            });
+          }
+
+          self.postMessage({ type: 'ready' });
+          self.addEventListener(
+            'message',
+            (event) => {
+              if (event.data?.type !== 'run' || event.ports.length !== 1) return;
+              setTimeout(() => run(event.data, event.ports[0]), 0);
+            },
+            { once: true },
+          );
+        `;
+
+        window.addEventListener(
+          'message',
+          (event) => {
+            if (event.source !== window.parent || event.data?.type !== 'run' || event.ports.length !== 1) return;
+
+            const port = event.ports[0];
+            const workerUrl = URL.createObjectURL(new Blob([workerSource], { type: 'text/javascript' }));
+            let worker;
+            try {
+              worker = new Worker(workerUrl);
+            } catch (error) {
+              URL.revokeObjectURL(workerUrl);
+              port.postMessage({
+                status: 'internal_error',
+                stdout: '',
+                stderr: '',
+                message: error instanceof Error ? error.message : 'The JavaScript sandbox worker could not start.',
+                time: null,
+                errorLine: null,
+                errorLineConfidence: 'unknown',
+              });
+              port.close();
+              return;
+            }
+            const revokeWorkerUrl = (workerEvent) => {
+              if (workerEvent.data?.type !== 'ready') return;
+              URL.revokeObjectURL(workerUrl);
+              worker.removeEventListener('message', revokeWorkerUrl);
+            };
+            worker.addEventListener('message', revokeWorkerUrl);
+            worker.addEventListener('error', (workerEvent) => {
+              port.postMessage({
+                status: 'internal_error',
+                stdout: '',
+                stderr: 'The JavaScript sandbox worker could not complete this run.',
+                message: workerEvent.message || 'The local runner stopped unexpectedly.',
+                time: null,
+                errorLine: null,
+                errorLineConfidence: 'unknown',
+              });
+              URL.revokeObjectURL(workerUrl);
+              port.close();
+              worker.terminate();
+            });
+            worker.postMessage({ ...event.data, type: 'run', port }, [port]);
+          },
+          { once: true },
+        );
+      })();
+    </script>
+  </body>
+</html>
