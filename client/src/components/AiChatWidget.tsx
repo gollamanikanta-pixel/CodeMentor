@@ -82,6 +82,32 @@ export function AiChatWidget({
     setOffset(next);
   };
 
+  useEffect(() => {
+    const keepWidgetInViewport = () => {
+      const bounds = widgetRef.current?.getBoundingClientRect();
+      if (!bounds) return;
+      const current = offsetRef.current;
+      const baseLeft = bounds.left - current.x;
+      const baseTop = bounds.top - current.y;
+      const margin = 12;
+      setChatOffset({
+        x: clamp(
+          current.x,
+          margin - baseLeft,
+          window.innerWidth - margin - bounds.width - baseLeft,
+        ),
+        y: clamp(
+          current.y,
+          margin - baseTop,
+          window.innerHeight - margin - bounds.height - baseTop,
+        ),
+      });
+    };
+
+    window.addEventListener('resize', keepWidgetInViewport);
+    return () => window.removeEventListener('resize', keepWidgetInViewport);
+  }, [minimized]);
+
   const onDragStart = (event: PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return;
     const bounds = widgetRef.current?.getBoundingClientRect();
