@@ -68,7 +68,7 @@ test('provider selection never routes an unmapped language to the remote runner'
 
 test('Judge0 submissions request explicit execution and network limits', () => {
   assert.equal(JUDGE0_RESOURCE_LIMITS.enable_network, false);
-  assert.equal(JUDGE0_RESOURCE_LIMITS.memory_limit, 268435456);
+  assert.equal(JUDGE0_RESOURCE_LIMITS.memory_limit, 256 * 1024);
   assert.equal(JUDGE0_RESOURCE_LIMITS.max_processes_and_or_threads, 20);
   assert.equal(JUDGE0_RESOURCE_LIMITS.number_of_runs, 1);
   assert.ok(JUDGE0_RESOURCE_LIMITS.cpu_time_limit > 0);
