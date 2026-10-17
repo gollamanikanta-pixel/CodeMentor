@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Bot, Lightbulb, ShieldCheck, Sparkles } from 'lucide-react';
 import type { DeepAnalysis, ExecutionResult, LanguageName, LocalAnalysis } from '../types';
@@ -37,6 +37,12 @@ export function AiHelpDialog({
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!open) return;
+    setResult(null);
+    setError('');
+  }, [open, code, language]);
 
   const runDeepHelp = async () => {
     setLoading(true);
