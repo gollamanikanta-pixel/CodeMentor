@@ -242,7 +242,9 @@ export function AiChatWidget({
           onPointerCancel={onDragEnd}
           onKeyDown={onDragKeyDown}
         >
-          <span className="ai-chat-avatar"><Bot size={20} aria-hidden="true" /></span>
+          <span className={`ai-chat-avatar${canChat ? '' : ' unavailable'}`}>
+            <Bot size={20} aria-hidden="true" />
+          </span>
           <span className="ai-chat-brand">
             <strong>AI Tutor</strong>
             <small>Here to help you learn</small>
@@ -320,7 +322,7 @@ export function AiChatWidget({
           {error ? <p className="ai-error" role="alert">{error}</p> : null}
           <p className="ai-chat-privacy">
             <ShieldCheck size={14} aria-hidden="true" />
-            Code and chat are sent to the AI provider only when you send a message. {explanationLevel} explanations · {hintLevel} hints.
+            Code, run details, local analysis, and chat are sent to the AI provider only when you send a message. {explanationLevel} explanations · {hintLevel} hints.
             {code.length > MAX_CHAT_SOURCE_CHARS ? ` Only the first ${MAX_CHAT_SOURCE_CHARS.toLocaleString()} code characters are included.` : ''}
           </p>
           <form className="ai-chat-composer" onSubmit={sendMessage}>

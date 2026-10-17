@@ -3954,6 +3954,10 @@ a:focus-visible,
   content: '';
 }
 
+.ai-chat-avatar.unavailable::after {
+  background: var(--amber);
+}
+
 .ai-chat-brand {
   display: flex;
   flex: 1;
