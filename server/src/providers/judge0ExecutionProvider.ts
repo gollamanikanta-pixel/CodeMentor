@@ -2,6 +2,7 @@ import { env } from '../config/env.js';
 import type { SecureRunInput, SecureRunResult, SecureRunStatus } from '../types/index.js';
 import { executionGuard, recordExecution, type SecureExecutionProvider } from './secureExecutionProvider.js';
 import { normalizeJudge0Run, type Judge0Response } from './judge0Normalizer.js';
+import { MAX_PROVIDER_RESPONSE_BYTES, readBoundedJson, readBoundedText } from './providerResponse.js';
 
 /**
  * Judge0 CE adapter (https://ce.judge0.com).
@@ -35,6 +36,29 @@ export const JUDGE0_SUPPORTED = Object.keys(JUDGE0_LANGUAGE_ID);
 const UNAVAILABLE_MESSAGE =
   'Secure execution is not configured. Add the execution-provider settings in server/.env to run C, C++, and Java.';
 
+export const JUDGE0_RESOURCE_LIMITS = {
+  cpu_time_limit: Math.min(5, Math.max(0.1, env.runTimeoutMs / 1000)),
+  cpu_extra_time: 1,
+  wall_time_limit: Math.max(1, Math.min(15, (env.runTimeoutMs + 2000) / 1000)),
+  memory_limit: 256 * 1024,
+  stack_limit: 64 * 1024,
+  max_processes_and_or_threads: 20,
+  max_file_size: 1024,
+  number_of_runs: 1,
+  enable_network: false,
+  enable_per_process_and_thread_time_limit: true,
+  enable_per_process_and_thread_memory_limit: true,
+} as const;
+
+export function buildJudge0Submission(source: string, languageId: number, stdin: string) {
+  return {
+    source_code: source,
+    language_id: languageId,
+    stdin,
+    ...JUDGE0_RESOURCE_LIMITS,
+  };
+}
+
 function unavailable(message: string, status: SecureRunStatus = 'unavailable'): SecureRunResult {
   return {
     status,
@@ -54,7 +78,7 @@ function unavailable(message: string, status: SecureRunStatus = 'unavailable'): 
 /** Reads a safe, short explanation from an error response body. */
 async function providerMessage(response: Response): Promise<string> {
   try {
-    const text = await response.text();
+    const text = await readBoundedText(response, 4096);
     if (!text) return '';
     let message = text;
     try {
@@ -87,24 +111,61 @@ function requestInit(body: unknown): RequestInit {
 }
 
 const PROBE_PROGRAM = '#include <stdio.h>\nint main(void){ puts("ok"); return 0; }';
+const PROBE_PROGRAMS: Record<string, string> = {
+  c: PROBE_PROGRAM,
+  java: 'public class Main { public static void main(String[] args) { System.out.println("ok"); } }',
+};
+const PROBE_CACHE_TTL_MS = 60_000;
+const probeCache = new Map<string, { expiresAt: number; result: { ok: boolean; message: string } }>();
+const pendingProbes = new Map<string, Promise<{ ok: boolean; message: string }>>();
 
 /**
- * Runs one tiny C program to prove submissions really execute. Used by the
- * capabilities endpoint so the UI never claims "Secure runner ready" on a
- * service that lists languages but refuses to run code.
+ * Runs a tiny program to prove a language really executes. Used by the
+ * capabilities endpoint so the UI never claims a language is ready based only
+ * on the provider responding to a different language.
  */
-export async function probeJudge0Execution(): Promise<{ ok: boolean; message: string }> {
+export function probeJudge0Execution(language = 'c'): Promise<{ ok: boolean; message: string }> {
+  const cached = probeCache.get(language);
+  if (cached && cached.expiresAt > Date.now()) return Promise.resolve(cached.result);
+  const pending = pendingProbes.get(language);
+  if (pending) return pending;
+  const request = runJudge0Probe(language)
+    .then((result) => {
+      probeCache.set(language, { expiresAt: Date.now() + PROBE_CACHE_TTL_MS, result });
+      return result;
+    })
+    .finally(() => pendingProbes.delete(language));
+  pendingProbes.set(language, request);
+  return request;
+}
+
+async function runJudge0Probe(language: string): Promise<{ ok: boolean; message: string }> {
   if (!env.judge0BaseUrl) return { ok: false, message: 'Secure execution is not configured.' };
+  const languageId = JUDGE0_LANGUAGE_ID[language];
+  const source = PROBE_PROGRAMS[language];
+  if (!languageId || !source) return { ok: false, message: `No readiness probe is defined for ${language}.` };
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), env.executionTimeoutMs);
   try {
     const response = await fetch(submissionsUrl(), {
-      ...requestInit({ source_code: PROBE_PROGRAM, language_id: JUDGE0_LANGUAGE_ID.c, stdin: '' }),
+      ...requestInit(buildJudge0Submission(source, languageId, '')),
       signal: controller.signal,
     });
-    if (response.ok) return { ok: true, message: 'Execution probe succeeded.' };
-    const detail = await providerMessage(response);
-    return { ok: false, message: detail || `The runner responded ${response.status}.` };
+    if (!response.ok) {
+      const detail = await providerMessage(response);
+      return { ok: false, message: detail || `The runner responded ${response.status}.` };
+    }
+    const result = await readBoundedJson<Judge0Response>(response, MAX_PROVIDER_RESPONSE_BYTES);
+    if (result.status?.id === 3) {
+      return { ok: true, message: `${language} execution probe succeeded.` };
+    }
+    const detail =
+      result.compile_output || result.stderr || result.message || result.status?.description || 'The program did not complete successfully.';
+    return {
+      ok: false,
+      message: `${language} readiness probe failed: ${detail.replace(/\s+/g, ' ').trim().slice(0, 240)}`,
+    };
   } catch (error) {
     return {
       ok: false,
@@ -147,11 +208,7 @@ export class Judge0ExecutionProvider implements SecureExecutionProvider {
 
     try {
       const response = await fetch(submissionsUrl(), {
-        ...requestInit({
-          source_code: source,
-          language_id: languageId,
-          stdin: input.stdin ?? '',
-        }),
+        ...requestInit(buildJudge0Submission(source, languageId, input.stdin ?? '')),
         signal: controller.signal,
       });
 
@@ -173,7 +230,7 @@ export class Judge0ExecutionProvider implements SecureExecutionProvider {
       }
 
       recordExecution();
-      const data = (await response.json()) as Judge0Response;
+      const data = await readBoundedJson<Judge0Response>(response, MAX_PROVIDER_RESPONSE_BYTES);
       return normalizeJudge0Run(data, Date.now() - startedAt);
     } catch (error) {
       const aborted = error instanceof Error && error.name === 'AbortError';

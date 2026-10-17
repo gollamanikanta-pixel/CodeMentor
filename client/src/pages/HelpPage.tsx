@@ -33,7 +33,7 @@ const SECTIONS: Array<{ icon: typeof BookOpen; title: string; body: ReactNode }>
     body: (
       <p>
         Write a Python or JavaScript program, add any input under <strong>Program Input</strong>, then click <strong>Run Code</strong>.
-        Runs happen locally in a browser worker. Use <strong>Analyze Locally</strong> for concepts,
+        Runs happen locally in isolated browser runtimes. Use <strong>Analyze Locally</strong> for concepts,
         line-by-line explanations, visuals
         and quizzes. <strong>I Fixed It — Run Code Again</strong> runs only the code currently in the editor.
       </p>
@@ -55,11 +55,11 @@ const SECTIONS: Array<{ icon: typeof BookOpen; title: string; body: ReactNode }>
     title: 'Browser-based execution',
     body: (
       <p>
-        <strong>{localRunnerLanguages.join(', ')}</strong> run in dedicated browser workers, so their source is not uploaded to an
-        execution service. Python downloads its Pyodide runtime from jsDelivr, and your programs can make their own network requests.
-        Add standard input before running. HTML/CSS/JavaScript web projects are rendered in a sandboxed browser preview. C, C++, and Java
-        run through the configured isolated execution service when it reports the language ready; their source and input are sent only
-        after you choose Run Code.
+        {localRunnerLanguages.join(' and ')} run in isolated browser runtimes, so their source is not uploaded to an execution service. Python runs in a
+        worker and downloads its Pyodide runtime from jsDelivr; Python programs can make their own network requests. JavaScript runs in a
+        worker inside a sandboxed iframe with network access blocked. Add standard input before running. HTML/CSS/JavaScript web projects are rendered
+        in a separate sandboxed browser preview. C, C++, and Java run through the configured isolated execution service when it reports
+        the language ready; their source and input are sent only after you choose Run Code.
       </p>
     ),
   },
@@ -109,7 +109,7 @@ const FAQS = [
   ],
   [
     'Which languages can run?',
-    'Python and JavaScript run locally in browser workers. C, C++, and Java run through the configured isolated execution service when the language is reported ready; source and input are sent only after you choose Run Code. HTML web projects use a sandboxed browser preview. Other listed languages are coming soon.',
+    'Python and JavaScript run locally in isolated browser runtimes. JavaScript runs in a network-restricted sandbox; Python runs in a worker and Python programs can make network requests. C, C++, and Java run through the configured isolated execution service when the language is reported ready; source and input are sent only after you choose Run Code. HTML web projects use a separate sandboxed browser preview. Other listed languages are coming soon.',
   ],
   [
     'What should I keep out of learning code?',

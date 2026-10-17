@@ -1,5 +1,6 @@
 import { env, executionConfigured } from '../config/env.js';
 import type { SecureRunInput, SecureRunResult, SecureRunStatus } from '../types/index.js';
+import { MAX_PROVIDER_RESPONSE_BYTES, readBoundedJson, truncateUtf8 } from './providerResponse.js';
 
 export interface SecureExecutionProvider {
   run(input: SecureRunInput): Promise<SecureRunResult>;
@@ -28,7 +29,8 @@ export function executionUsageSnapshot(): { count: number; lastRequestAt: number
 /**
  * Shared guard applied by every remote provider before a run, so the daily cap
  * and cooldown are enforced consistently (and public runner rate limits are not
- * tripped) regardless of which adapter is configured.
+ * tripped) within this server process, regardless of which adapter is configured.
+ * This in-memory guard is best-effort, not an account quota or a distributed lock.
  */
 export function executionGuard(): { ok: true } | { ok: false; message: string } {
   resetUsage();
@@ -60,6 +62,68 @@ function unavailable(message = UNAVAILABLE_MESSAGE, status: SecureRunStatus = 'u
     exitCode: null,
     errorLine: null,
     errorLineConfidence: 'unknown',
+    executionMode: 'secure_remote',
+  };
+}
+
+const SECURE_RUN_STATUSES: readonly SecureRunStatus[] = [
+  'success',
+  'compilation_error',
+  'runtime_error',
+  'time_limit_exceeded',
+  'memory_limit_exceeded',
+  'internal_error',
+  'unavailable',
+];
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isSecureRunStatus(value: unknown): value is SecureRunStatus {
+  return typeof value === 'string' && SECURE_RUN_STATUSES.includes(value as SecureRunStatus);
+}
+
+function finiteNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+/** Copies only learner-facing execution fields from the untrusted provider response. */
+export function normalizeLiveProviderResult(value: unknown, source: string): SecureRunResult {
+  if (!isRecord(value) || !isSecureRunStatus(value.status)) {
+    return unavailable('The secure provider returned an invalid result.', 'internal_error');
+  }
+
+  const lineCount = source.split(/\r\n|\r|\n/).length;
+  const proposedLine = value.errorLine;
+  const errorLine = typeof proposedLine === 'number' &&
+    Number.isSafeInteger(proposedLine) &&
+    proposedLine > 0 &&
+    proposedLine <= lineCount
+    ? proposedLine
+    : null;
+  const confidence =
+    errorLine !== null && (value.errorLineConfidence === 'exact' || value.errorLineConfidence === 'estimated')
+      ? value.errorLineConfidence
+      : 'unknown';
+  const text = (field: unknown, limit = env.executionMaxOutputBytes) =>
+    typeof field === 'string' ? truncateUtf8(field, limit) : '';
+  const message = typeof value.message === 'string' ? value.message.slice(0, 300) : '';
+  const proposedExitCode = value.exitCode;
+  const exitCode =
+    typeof proposedExitCode === 'number' && Number.isSafeInteger(proposedExitCode) ? proposedExitCode : null;
+
+  return {
+    status: value.status,
+    stdout: text(value.stdout),
+    stderr: text(value.stderr),
+    compileOutput: text(value.compileOutput),
+    message,
+    time: finiteNumber(value.time),
+    memory: finiteNumber(value.memory),
+    exitCode,
+    errorLine,
+    errorLineConfidence: confidence,
     executionMode: 'secure_remote',
   };
 }
@@ -106,13 +170,8 @@ export class LiveSecureExecutionProvider implements SecureExecutionProvider {
         return unavailable('The secure provider did not accept this learning run.', 'internal_error');
       }
       recordExecution();
-      const data = (await response.json()) as Partial<SecureRunResult>;
-      return {
-        ...unavailable('', 'success'),
-        ...data,
-        status: (data.status as SecureRunStatus) ?? 'internal_error',
-        executionMode: 'secure_remote',
-      };
+      const data = await readBoundedJson<unknown>(response, MAX_PROVIDER_RESPONSE_BYTES);
+      return normalizeLiveProviderResult(data, input.source);
     } catch {
       return unavailable('The secure provider could not be reached safely.', 'internal_error');
     } finally {

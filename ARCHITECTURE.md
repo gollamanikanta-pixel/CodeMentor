@@ -37,9 +37,11 @@ carries `correctedCode`, `fixedCode`, `correctedLine`, `applyFix`, `patch` or
 ## Local guidance and account data flow
 
 1. The learner types in Monaco. Autosave writes a local draft — no run, no AI.
-2. **Run Code** executes Python and JavaScript in local browser workers with
-   pre-supplied stdin; HTML preview stays in a sandboxed browser iframe. Python
-   downloads Pyodide from jsDelivr, and learner code can make network requests.
+2. **Run Code** executes Python in a local browser worker and JavaScript in a
+   dedicated worker created by a network-restricted, opaque-origin sandbox
+   frame, with pre-supplied stdin; HTML preview stays in a separate sandboxed
+   browser iframe. Python downloads Pyodide from jsDelivr, and Python code can
+   make network requests.
 3. The local analyzer runs in the browser and produces a `LocalAnalysis`.
 4. Analysis, visuals and quiz questions are generated locally. On completion,
    a signed-in learner's quiz result is saved through the protected API.
@@ -100,8 +102,8 @@ These account-backed features coexist with local analysis and draft autosave.
 ## Security posture
 
 There is no `child_process`, `exec`, `spawn`, shell, local compiler or Docker path
-anywhere on the server. The single intentional exception in the whole project is
-the **JavaScript browser worker**, which compiles learner code with the `Function`
-constructor — the only way to run JavaScript locally — inside an isolated worker
-with no DOM or network access. Secrets live only in `server/.env`; the browser
-never receives an API key.
+anywhere on the server. Learner JavaScript is compiled with the `Function`
+constructor in a worker created by an `allow-scripts` iframe without
+`allow-same-origin`; the worker inherits the opaque origin and restrictive CSP,
+which block access to app data and network connections. Secrets live only in
+server environment configuration; the browser never receives an API key.

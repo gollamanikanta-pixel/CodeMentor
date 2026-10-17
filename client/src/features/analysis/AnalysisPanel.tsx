@@ -179,6 +179,7 @@ export function ErrorsHintsTab({
   const [index, setIndex] = useState(0);
   const errors = analysis.errors;
   const resolved = execution?.status === 'success' && errors.length === 0;
+  const runSucceeded = execution?.status === 'success';
 
   if (!errors.length) {
     return (
@@ -188,10 +189,10 @@ export function ErrorsHintsTab({
             <Check size={19} />
           </div>
           <div>
-            <strong>Great work—this error is no longer detected. You fixed it yourself.</strong>
+            <strong>{resolved ? 'Your code ran successfully.' : 'No likely issues detected.'}</strong>
             <p>
               {resolved
-                ? 'Your latest run completed without a detected issue. Review the concepts below to keep the learning going.'
+                ? 'The run succeeded, and the local analyzer found no likely issues. Review the concepts below to keep learning.'
                 : 'No likely issues were found by the local analyzer on this version of your code.'}
             </p>
           </div>
@@ -205,7 +206,7 @@ export function ErrorsHintsTab({
           ))}
         </div>
         <Button variant="soft" icon={RotateCcw} onClick={onRetry}>
-          I Fixed It — Run Code Again
+          {resolved ? 'Run Code Again' : 'Run Code'}
         </Button>
         <div className="analysis-footer">
           <span>
@@ -223,18 +224,27 @@ export function ErrorsHintsTab({
 
   return (
     <div className="analysis-content">
-      <div className="analysis-summary warning">
+      <div className={`analysis-summary ${runSucceeded ? 'success' : 'warning'}`}>
         <div className="summary-icon">
-          <Lightbulb size={19} />
+          {runSucceeded ? <Check size={19} /> : <Lightbulb size={19} />}
         </div>
         <div>
-          <strong>Let’s understand this error together.</strong>
+          <strong>
+            {runSucceeded ? 'Your code ran successfully.' : 'Potential issues and learning hints'}
+          </strong>
           <p>
-            {errors.length} learning {errors.length === 1 ? 'opportunity' : 'opportunities'} detected. Review each one, then try one
-            small change.
+            {runSucceeded
+              ? `The local analyzer found ${errors.length} possible ${errors.length === 1 ? 'edge case' : 'edge cases'}. These are suggestions, not errors from your successful run.`
+              : `${errors.length} possible ${errors.length === 1 ? 'issue' : 'issues'} found by local analysis. Some may be potential edge cases, not confirmed runtime errors.`}
           </p>
         </div>
       </div>
+
+      {runSucceeded ? (
+        <p className="analysis-run-note" role="note">
+          Why is a hint still shown? Local analysis checks code patterns and may not know the exact values used in your successful run. The hint describes a possible case to consider, not a failure that happened.
+        </p>
+      ) : null}
 
       {errors.length > 1 ? (
         <div className="error-pager" role="tablist" aria-label="Detected issues">
@@ -312,12 +322,14 @@ export function ErrorsHintsTab({
       </div>
 
       <Button variant="soft" icon={RotateCcw} onClick={onRetry}>
-        I Fixed It — Run Code Again
+        {runSucceeded ? 'Run Code Again' : 'I Fixed It — Run Code Again'}
       </Button>
 
       <p className="policy-note">
-        <AlertCircle size={14} /> CodeMentor AI never writes the fix for you. Use these hints to make the change yourself, then run
-        your current code again.
+        <AlertCircle size={14} />
+        {runSucceeded
+          ? 'These are possible edge cases, not failures in your last run. You can keep your code as it is or test how it behaves with different inputs.'
+          : 'CodeMentor AI never writes the fix for you. Use these hints to make the change yourself, then run your current code again.'}
       </p>
 
       <div className="analysis-footer">

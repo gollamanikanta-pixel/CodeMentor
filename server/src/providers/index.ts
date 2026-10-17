@@ -133,6 +133,38 @@ export type ExecutionCapabilities = {
   message: string;
 };
 
+export function buildJudge0Capabilities(
+  checkedAt: string,
+  javaProbe: { ok: boolean; message: string },
+  runtimeNote: string,
+): ExecutionCapabilities {
+  const languages = Object.fromEntries(
+    JUDGE0_SUPPORTED.map((language) => {
+      const javaUnavailable = language === 'java' && !javaProbe.ok;
+      return [
+        language,
+        {
+          ready: !javaUnavailable,
+          version: null,
+          note: javaUnavailable ? javaProbe.message : runtimeNote,
+        },
+      ];
+    }),
+  );
+  const readyLanguages = JUDGE0_SUPPORTED.filter((language) => languages[language].ready);
+  const readyMessage = readyLanguages.length
+    ? `Secure runner ready for ${readyLanguages.map((language) => LANGUAGE_LABEL[language] ?? language).join(', ')}.`
+    : 'The secure runner is reachable but no language passed its readiness check.';
+
+  return {
+    provider: 'judge0',
+    reachable: true,
+    checkedAt,
+    languages,
+    message: javaProbe.ok ? readyMessage : `${readyMessage} Java is unavailable: ${javaProbe.message}`,
+  };
+}
+
 /**
  * Reports what the configured runner can actually do right now. This is the
  * source of truth for "Secure runner ready" in the UI — it probes the runner
@@ -165,18 +197,8 @@ export async function executionCapabilities(): Promise<ExecutionCapabilities> {
         message: `The secure runner is reachable but cannot execute learner code yet: ${probe.message}`,
       };
     }
-    return {
-      provider: 'judge0',
-      reachable: true,
-      checkedAt,
-      languages: Object.fromEntries(
-        JUDGE0_SUPPORTED.map((language) => [
-          language,
-          { ready: true, version: null, note: 'Judge0 CE remote runtime.' },
-        ]),
-      ),
-      message: `Secure runner ready for ${JUDGE0_SUPPORTED.map((language) => LANGUAGE_LABEL[language] ?? language).join(', ')}.`,
-    };
+    const javaProbe = await probeJudge0Execution('java');
+    return buildJudge0Capabilities(checkedAt, javaProbe, 'Judge0 CE remote runtime.');
   }
 
   if (!usingPiston()) {
@@ -215,15 +237,8 @@ export async function executionCapabilities(): Promise<ExecutionCapabilities> {
     if (!judge0AvailableAsFallback()) return null;
     const probe = await probeJudge0Execution();
     if (!probe.ok) return null;
-    return {
-      provider: 'judge0',
-      reachable: true,
-      checkedAt,
-      languages: Object.fromEntries(
-        JUDGE0_SUPPORTED.map((language) => [language, { ready: true, version: null, note: 'Judge0 CE fallback runtime.' }]),
-      ),
-      message: `Secure runner ready for ${JUDGE0_SUPPORTED.map((language) => LANGUAGE_LABEL[language] ?? language).join(', ')}.`,
-    };
+    const javaProbe = await probeJudge0Execution('java');
+    return buildJudge0Capabilities(checkedAt, javaProbe, 'Judge0 CE fallback runtime.');
   };
 
   if (!runtimesOk) return (await tryJudge0Fallback()) ?? unreachable('Secure runner unreachable.');

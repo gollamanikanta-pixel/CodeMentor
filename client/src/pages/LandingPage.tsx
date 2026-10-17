@@ -115,7 +115,7 @@ export function LandingPage() {
         <div className="section-kicker">HONEST ABOUT WHAT RUNS</div>
         <h2>Six supported languages. More are coming soon.</h2>
         <div className="language-grid">
-          <LanguageCard title="Local browser runners" tone="indigo" icon={ShieldCheck} items={localRunnerLanguages} note="Runs in browser workers; no remote code execution service." />
+          <LanguageCard title="Local browser runners" tone="indigo" icon={ShieldCheck} items={localRunnerLanguages} note="Runs in isolated browser runtimes; no remote code execution service." />
           <LanguageCard title="Secure remote runner" tone="amber" icon={Code2} items={secureRemoteLanguages} note="Runs in an isolated execution service when available. Source is sent only after you choose Run Code." />
           <LanguageCard title="Sandboxed Browser Preview" tone="green" icon={Code2} items={previewLanguages} note="Preview HTML safely in your browser. External resources are blocked." />
           <LanguageCard title="Coming soon" tone="amber" icon={AlertCircle} items={comingSoonLanguageNames} note="These languages will become available in a future release." />

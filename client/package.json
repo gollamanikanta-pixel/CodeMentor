@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "check": "tsc --noEmit",
     "preview": "vite preview --host 0.0.0.0",
-    "test": "tsx --test tests/localAnalyzer.test.ts tests/localQuiz.test.ts tests/htmlAnalyzer.test.ts tests/sandboxPreview.test.ts tests/visualDetails.test.ts tests/programFlow.test.ts tests/executionTranscript.test.ts tests/interactiveRunner.test.ts"
+    "test": "tsx --test tests/localAnalyzer.test.ts tests/localQuiz.test.ts tests/htmlAnalyzer.test.ts tests/sandboxPreview.test.ts tests/visualDetails.test.ts tests/programFlow.test.ts tests/executionTranscript.test.ts tests/interactiveRunner.test.ts tests/outputBuffer.test.ts tests/javascriptIsolation.test.ts"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",

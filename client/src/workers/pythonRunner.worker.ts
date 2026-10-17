@@ -1,17 +1,11 @@
+import { BoundedOutputBuffer, boundOutputText } from './outputBuffer';
+
 type Request = { requestId: string; sourceCode: string; stdin: string };
 
 const PYODIDE_VERSION = 'v0.26.2';
 const PYODIDE_CDN = `https://cdn.jsdelivr.net/pyodide/${PYODIDE_VERSION}/full/`;
 
 let pyodidePromise: Promise<any> | null = null;
-
-/**
- * Pyodide's `batched` writers report one entry per printed line, with the
- * newline already removed, so the newlines have to be put back.
- */
-function joinLines(chunks: string[]): string {
-  return chunks.join('\n');
-}
 
 /**
  * This worker is a module worker, so classic `importScripts` is unavailable.
@@ -31,8 +25,8 @@ async function handleRun(event: MessageEvent<Request>) {
   const started = performance.now();
   // Declared outside the try so a failure can still hand back whatever the
   // learner's program printed before it stopped.
-  const stdout: string[] = [];
-  const stderr: string[] = [];
+  const stdout = new BoundedOutputBuffer();
+  const stderr = new BoundedOutputBuffer();
   try {
     const pyodide = await loadPyodideRuntime();
 
@@ -47,10 +41,9 @@ async function handleRun(event: MessageEvent<Request>) {
     const inputLines = rawLines;
     let inputIndex = 0;
 
-    // Pyodide hands `batched` one entry per printed line; joinLines below puts
-    // the newlines back so multi-line programs do not collapse into one line.
-    pyodide.setStdout({ batched: (value: string) => stdout.push(value) });
-    pyodide.setStderr({ batched: (value: string) => stderr.push(value) });
+    // Pyodide reports one entry per printed line, so the buffer restores newlines.
+    pyodide.setStdout({ batched: (value: string) => stdout.write(value) });
+    pyodide.setStderr({ batched: (value: string) => stderr.write(value) });
 
     /*
      * Expose a JS-backed input() so learner programs read stdin lines. When the
@@ -84,8 +77,8 @@ async function handleRun(event: MessageEvent<Request>) {
     self.postMessage({
       requestId: event.data.requestId,
       status: 'success',
-      stdout: joinLines(stdout),
-      stderr: joinLines(stderr),
+      stdout: stdout.toString(),
+      stderr: stderr.toString(),
       message: '',
       time: performance.now() - started,
       errorLine: null,
@@ -124,9 +117,9 @@ async function handleRun(event: MessageEvent<Request>) {
       requestId: event.data.requestId,
       status: isSyntax ? 'syntax_error' : 'runtime_error',
       // Whatever the program printed before it failed still belongs to the learner.
-      stdout: joinLines(stdout),
+      stdout: stdout.toString(),
       // `stderr` keeps the raw traceback; `message` is the calm one-line summary.
-      stderr: text,
+      stderr: boundOutputText(text),
       message: lastLine.trim().slice(0, 300),
       time: performance.now() - started,
       errorLine: deepest,
