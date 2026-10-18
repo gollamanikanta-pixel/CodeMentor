@@ -13,9 +13,11 @@ This is the production deployment path for this repository:
 No Railway service is required for the Vercel + Supabase deployment. The
 interactive terminal needs a long-running WebSocket-capable host and therefore
 is not used by the single-file Playground. Python and JavaScript run locally in
-browser workers; Python downloads Pyodide from jsDelivr on first use. Learner
-programs may make their own network requests. Single-request Judge0 execution
-for multi-file projects is a separate feature.
+the browser; Python preloads Pyodide from jsDelivr when selected and reuses the
+warm runtime between completed runs. Each Python run uses a fresh global
+namespace. Python programs may make their own network requests. JavaScript runs in a
+network-restricted, opaque-origin iframe. Single-request Judge0 execution for
+multi-file projects is a separate feature.
 
 ## 1. Connect the GitHub repository to Vercel
 
@@ -117,9 +119,9 @@ dashboard.
 
 - Vercel serverless functions cannot accept the long-lived WebSocket upgrade
   needed by `/api/terminal`; interactive terminal runs will not work on this
-  deployment. Python and JavaScript single-file runs use browser workers
-  instead; single-request Judge0 paths for multi-file projects are independent
-  of that terminal.
+  deployment. Python runs in a browser worker and JavaScript runs in a
+  network-restricted sandbox iframe instead; single-request Judge0 paths for
+  multi-file projects are independent of that terminal.
 - In-memory AI result cache and runner quota/cooldown counters are per function
   instance and may reset on cold starts. They are best-effort and not shared
   across instances.

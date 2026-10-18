@@ -31,6 +31,7 @@ row says otherwise.
 - [ ] Mobile: panels stack, no horizontal scrolling, the sidebar starts collapsed, buttons stay tappable (44px+).
 - [ ] No horizontal overflow at 760–900px: the account name and breadcrumbs drop out of the top bar before the single-column mobile layout takes over.
 - [ ] At ≤560px the project bar and editor toolbar wrap instead of clipping their controls.
+- [ ] At 561–840px the expanded AI chat stays clear of the primary Run Code action; on taller desktop viewports it stays below the run controls; at ≤560px width or ≤680px height it starts minimized.
 - [ ] The editor card and analysis panel each hug their own content (no large empty bordered panel when one column is taller).
 - [ ] Both themes stay consistent: cards keep a faint top sheen, the console reads as a darker terminal well with a cyan prompt, and the diagram frame shows a soft cyan aura on hover.
 
@@ -43,11 +44,13 @@ row says otherwise.
 ## 4. Python runner
 
 - [ ] Load the Python starter and click **Run Code** → output shows `Class average: 84.25` and status `success`.
-- [ ] First run shows “Preparing Python runtime…” in the console.
+- [ ] Selecting Python starts loading Pyodide; the first run shows “Preparing Python runtime…” only if loading is still in progress.
+- [ ] A second run reuses the warmed runtime, and variables defined in one run are not visible to the next run.
 - [ ] Paste a program using `input()` and put values in **Program Input (stdin)** one per line → values are read in order.
 - [ ] Introduce a `NameError` → console **Errors** tab shows it and the analyzer adds a learning error.
 - [ ] Introduce a syntax error (e.g. a missing parenthesis) → `syntax_error` with a possible line.
 - [ ] Write an infinite loop → times out after ~3s and the worker is terminated (page stays responsive).
+- [ ] Print more than 20,000 characters to stdout and stderr → each stream stays bounded and shows a truncation notice.
 - [ ] Enter code larger than 50 KB → blocked with a safe message.
 
 ## 5. JavaScript runner
@@ -57,6 +60,7 @@ row says otherwise.
 - [ ] `input()` reads stdin lines.
 - [ ] Throwing an error reports `runtime_error` in well under a second.
 - [ ] Infinite loop times out after ~3s.
+- [ ] Print more than 20,000 characters to stdout and stderr → each stream stays bounded and shows a truncation notice.
 
 ## 6. Errors & Learning Hints
 
@@ -109,10 +113,11 @@ row says otherwise.
 
 ## 12. Available runners
 
-- [ ] Python and JavaScript run in browser workers without a hosted execution service.
-- [ ] Python loads Pyodide from jsDelivr on first use and reports a clear error if runtime bootstrap fails.
+- [ ] Python and JavaScript run locally without a hosted execution service; JavaScript runs in an opaque-origin iframe with network access blocked.
+- [ ] Python preloads Pyodide from jsDelivr when selected and reports a clear error if runtime bootstrap fails.
 - [ ] Program Input values are echoed and consumed in order; multiple values and missing input behave predictably.
-- [ ] Syntax/runtime errors report useful output; infinite loops time out and Stop terminates the worker.
+- [ ] Syntax/runtime errors report useful output; infinite loops time out and Stop terminates the active worker or sandbox frame.
+- [ ] JavaScript cannot read the app DOM, cookies, or storage, and attempts to use fetch, WebSocket, images, forms, or nested frames are blocked.
 - [ ] C, C++, and Java show the secure-runner readiness state and run from the single-file Playground only when their capability is ready.
 - [ ] C, C++, and Java source and stdin are sent to the configured isolated service only after the learner chooses Run Code.
 - [ ] A deliberately broken C program (a missing `;`) returns `compilation_error` with the compiler output and the reported line — a learning signal, never a fix or a patch.
@@ -125,6 +130,7 @@ row says otherwise.
 - [ ] “Ask AI for Deeper Help” opens a dialog showing provider readiness or the honest unconfigured state.
 - [ ] With no AI keys: the dialog explains everything local remains available; confirming returns the safe message.
 - [ ] With keys configured: requests are available on demand without an app-imposed daily cap or cooldown; Gemini's own quotas and billing still apply.
+- [ ] A recovered HTTP 503 from the AI provider is retried once; a persistent HTTP 503 returns a safe unavailable message without looping.
 - [ ] Repeating the identical request returns `cached: true` and reuses the saved explanation.
 - [ ] AI is never called on load, typing, tab switch, theme change, save, local analysis, visual/quiz generation, or upload (verify in the Network panel).
 

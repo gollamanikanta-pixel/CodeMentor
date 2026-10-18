@@ -1,6 +1,7 @@
 import { env } from '../config/env.js';
 import type { SecureRunStatus } from '../types/index.js';
 import { errorLineFromOutput } from './executionErrorLine.js';
+import { truncateUtf8 } from './providerResponse.js';
 
 /**
  * Normalizes Judge0 CE's raw submission payload onto CodeMentor's honest result
@@ -62,9 +63,7 @@ function mapStatus(id: number | undefined, description: string | undefined): { s
 }
 
 function truncateOutput(value: string): string {
-  const limit = env.executionMaxOutputBytes;
-  if (value.length <= limit) return value;
-  return `${value.slice(0, limit)}\n\n[Output truncated at ${limit} bytes by CodeMentor]`;
+  return truncateUtf8(value, env.executionMaxOutputBytes);
 }
 
 /** Judge0 returns wall time in seconds as a string ("0.031"); report ms. */
@@ -97,15 +96,34 @@ export type NormalizedJudge0Run = {
 
 /** Maps one Judge0 submission response body onto the shared result shape. */
 export function normalizeJudge0Run(data: Judge0Response, elapsedMs: number): NormalizedJudge0Run {
-  const { status, message } = mapStatus(data.status?.id, data.status?.description);
-  const compileOutput = truncateOutput((data.compile_output ?? '').trim());
-  const rawStdout = data.stdout ?? '';
-  const rawStderr = data.stderr ?? '';
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    return {
+      status: 'internal_error',
+      stdout: '',
+      stderr: '',
+      compileOutput: '',
+      message: 'The secure runner returned an invalid result.',
+      time: elapsedMs,
+      memory: null,
+      exitCode: null,
+      errorLine: null,
+      errorLineConfidence: 'unknown',
+      executionMode: 'secure_remote',
+    };
+  }
+
+  const statusData = data.status && typeof data.status === 'object' ? data.status : null;
+  const statusId = statusData && Number.isSafeInteger(statusData.id) ? statusData.id : undefined;
+  const description = typeof statusData?.description === 'string' ? statusData.description.slice(0, 300) : undefined;
+  const { status, message } = mapStatus(statusId, description);
+  const compileOutput = truncateOutput(typeof data.compile_output === 'string' ? data.compile_output.trim() : '');
+  const rawStdout = typeof data.stdout === 'string' ? data.stdout : '';
+  const rawStderr = typeof data.stderr === 'string' ? data.stderr : '';
 
   const stdout = status === 'success' || status === 'runtime_error' ? truncateOutput(rawStdout) : '';
   const stderr = status === 'runtime_error' ? truncateOutput(rawStderr) : '';
 
-  const exitCode = typeof data.exit_code === 'number' ? data.exit_code : null;
+  const exitCode = typeof data.exit_code === 'number' && Number.isSafeInteger(data.exit_code) ? data.exit_code : null;
   const diagnostic = `${compileOutput}\n${stderr}`.trim();
   const line = status === 'compilation_error' || status === 'runtime_error' ? errorLineFromOutput(diagnostic) : null;
 

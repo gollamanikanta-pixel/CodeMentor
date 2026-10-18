@@ -45,8 +45,8 @@ carries `correctedCode`, `fixedCode`, `correctedLine`, `applyFix`, `patch` or
 | Project / file APIs | **Implemented** | Owner-scoped CRUD, `safePath`, file/byte/count caps, Zod validation. |
 | Multi-file workspace | **Implemented** | Explorer, tabs, entry file, rename-free add/delete, themed Monaco, save. |
 | Sandboxed HTML/CSS/JS preview | **Implemented (workspace)** | `allow-scripts` iframe, external resources blocked, console bridge. |
-| Python browser runner | **Implemented** | Pyodide in a dedicated worker, pre-supplied stdin, bootstrap/runtime limits, honest error mapping. |
-| JavaScript browser runner | **Implemented** | Dedicated worker, `console` capture, pre-supplied `input()`, timeout and cancellation. |
+| Python browser runner | **Implemented** | Pyodide preloads on language selection and stays warm between runs; each run has a fresh global namespace, pre-supplied stdin, bootstrap/runtime limits and honest error mapping. |
+| JavaScript browser runner | **Implemented** | Network-restricted opaque-origin iframe, `console` capture, pre-supplied `input()`, timeout and cancellation. |
 | Local analysis (Python / JS / TS / SQL) | **Implemented** | Rule-based, with progressive hints and uncertainty labels. |
 | Local visuals (9 kinds) | **Implemented** | SVG + safe Mermaid from detected structure. |
 | Local quizzes + account history | **Implemented** | Generated locally; completed signed-in quiz results use the protected Postgres-backed API. |

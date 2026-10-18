@@ -163,6 +163,35 @@ export class ProviderOutputError extends Error {
   }
 }
 
+const PROVIDER_RETRY_DELAY_MS = 300;
+
+/** Retry one transient provider outage without exceeding the request timeout. */
+export async function fetchWithUnavailableRetry(
+  fetchRequest: () => Promise<Response>,
+  signal: AbortSignal,
+): Promise<Response> {
+  const response = await fetchRequest();
+  if (response.status !== 503) return response;
+
+  await response.body?.cancel();
+  await new Promise<void>((resolve, reject) => {
+    const onAbort = () => {
+      clearTimeout(timer);
+      signal.removeEventListener('abort', onAbort);
+      const error = new Error('The operation was aborted.');
+      error.name = 'AbortError';
+      reject(error);
+    };
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, PROVIDER_RETRY_DELAY_MS);
+    if (signal.aborted) onAbort();
+    else signal.addEventListener('abort', onAbort, { once: true });
+  });
+  return fetchRequest();
+}
+
 export function providerFailureMessage(error: ProviderRequestError): string {
   if (error.kind === 'http' && (error.status === 401 || error.status === 403)) {
     return `The AI provider denied access (HTTP ${error.status}). Check the API key, model access, and provider-side key restrictions. Local guidance remains available.`;
@@ -234,21 +263,23 @@ async function callProvider(
     const requestContent = repair
       ? `Your previous reply did not match the required response shape. Reply with exactly one JSON object containing every required key and non-empty summary and deeperExplanation strings. Do not use markdown.\n${userContent}`
       : userContent;
-    const response = isGemini
-      ? await fetch(
-          `${providerUrl.origin}/v1beta/models/${encodeURIComponent(env.aiModel)}:generateContent`,
-          {
-            method: 'POST',
-            headers: { 'content-type': 'application/json', 'x-goog-api-key': env.aiKey },
-            body: JSON.stringify({
-              systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-              contents: [{ role: 'user', parts: [{ text: requestContent }] }],
-              generationConfig: { temperature: 0.2, responseMimeType: 'application/json' },
-            }),
-            signal: controller.signal,
-          },
-        )
-      : await fetch(isGeminiOpenAi ? geminiOpenAiEndpoint(providerUrl) : env.aiBaseUrl, {
+    const requestUrl = isGemini
+      ? `${providerUrl.origin}/v1beta/models/${encodeURIComponent(env.aiModel)}:generateContent`
+      : isGeminiOpenAi
+        ? geminiOpenAiEndpoint(providerUrl)
+        : env.aiBaseUrl;
+    const requestInit: RequestInit = isGemini
+      ? {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-goog-api-key': env.aiKey },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+            contents: [{ role: 'user', parts: [{ text: requestContent }] }],
+            generationConfig: { temperature: 0.2, responseMimeType: 'application/json' },
+          }),
+          signal: controller.signal,
+        }
+      : {
           method: 'POST',
           headers: { 'content-type': 'application/json', authorization: 'Bearer ' + env.aiKey },
           body: JSON.stringify({
@@ -261,7 +292,8 @@ async function callProvider(
             ],
           }),
           signal: controller.signal,
-        });
+        };
+    const response = await fetchWithUnavailableRetry(() => fetch(requestUrl, requestInit), controller.signal);
     if (!response.ok) throw new ProviderRequestError('http', response.status);
 
     let data: unknown;
@@ -321,24 +353,26 @@ async function callChatProvider(input: AiChatInput): Promise<string> {
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const response = isGemini
-      ? await fetch(
-          `${providerUrl.origin}/v1beta/models/${encodeURIComponent(env.aiModel)}:generateContent`,
-          {
-            method: 'POST',
-            headers: { 'content-type': 'application/json', 'x-goog-api-key': env.aiKey },
-            body: JSON.stringify({
-              systemInstruction: { parts: [{ text: systemPrompt }] },
-              contents: input.messages.map((message) => ({
-                role: message.role === 'assistant' ? 'model' : 'user',
-                parts: [{ text: message.content }],
-              })),
-              generationConfig: { temperature: 0.4 },
-            }),
-            signal: controller.signal,
-          },
-        )
-      : await fetch(isGeminiOpenAi ? geminiOpenAiEndpoint(providerUrl) : env.aiBaseUrl, {
+    const requestUrl = isGemini
+      ? `${providerUrl.origin}/v1beta/models/${encodeURIComponent(env.aiModel)}:generateContent`
+      : isGeminiOpenAi
+        ? geminiOpenAiEndpoint(providerUrl)
+        : env.aiBaseUrl;
+    const requestInit: RequestInit = isGemini
+      ? {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-goog-api-key': env.aiKey },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: systemPrompt }] },
+            contents: input.messages.map((message) => ({
+              role: message.role === 'assistant' ? 'model' : 'user',
+              parts: [{ text: message.content }],
+            })),
+            generationConfig: { temperature: 0.4 },
+          }),
+          signal: controller.signal,
+        }
+      : {
           method: 'POST',
           headers: { 'content-type': 'application/json', authorization: 'Bearer ' + env.aiKey },
           body: JSON.stringify({
@@ -350,7 +384,8 @@ async function callChatProvider(input: AiChatInput): Promise<string> {
             ],
           }),
           signal: controller.signal,
-        });
+        };
+    const response = await fetchWithUnavailableRetry(() => fetch(requestUrl, requestInit), controller.signal);
     if (!response.ok) throw new ProviderRequestError('http', response.status);
 
     let data: unknown;

@@ -53,7 +53,9 @@ export function AiChatWidget({
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [minimized, setMinimized] = useState(false);
+  const [minimized, setMinimized] = useState(() =>
+    window.matchMedia('(max-width: 560px), (max-height: 680px)').matches,
+  );
   const [dragging, setDragging] = useState(false);
   const [offset, setOffset] = useState<Offset>({ x: 0, y: 0 });
   const conversationRef = useRef<HTMLDivElement | null>(null);
@@ -84,6 +86,9 @@ export function AiChatWidget({
 
   useEffect(() => {
     const keepWidgetInViewport = () => {
+      if (window.matchMedia('(max-width: 560px), (max-height: 680px)').matches) {
+        setMinimized(true);
+      }
       const bounds = widgetRef.current?.getBoundingClientRect();
       if (!bounds) return;
       const current = offsetRef.current;

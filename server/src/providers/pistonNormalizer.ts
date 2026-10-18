@@ -1,6 +1,7 @@
 import { env } from '../config/env.js';
 import type { SecureRunStatus } from '../types/index.js';
 import { errorLineFromOutput } from './executionErrorLine.js';
+import { truncateUtf8 } from './providerResponse.js';
 
 /**
  * Normalizes Piston's raw run/compile payloads onto CodeMentor's honest result
@@ -25,9 +26,7 @@ export type PistonResponse = {
 export { errorLineFromOutput as errorLineFromPistonOutput } from './executionErrorLine.js';
 
 function truncateOutput(value: string): string {
-  const limit = env.executionMaxOutputBytes;
-  if (value.length <= limit) return value;
-  return `${value.slice(0, limit)}\n\n[Output truncated at ${limit} bytes by CodeMentor]`;
+  return truncateUtf8(value, env.executionMaxOutputBytes);
 }
 
 export type NormalizedPistonRun = {
@@ -46,10 +45,28 @@ export type NormalizedPistonRun = {
 
 /** Maps one Piston `execute` response body onto the shared result shape. */
 export function normalizePistonRun(data: PistonResponse, elapsedMs: number): NormalizedPistonRun {
-  const compile = data.compile ?? null;
-  const run = data.run ?? null;
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    return {
+      status: 'internal_error',
+      stdout: '',
+      stderr: '',
+      compileOutput: '',
+      message: 'The secure runner returned an invalid result.',
+      time: elapsedMs,
+      memory: null,
+      exitCode: null,
+      errorLine: null,
+      errorLineConfidence: 'unknown',
+      executionMode: 'secure_remote',
+    };
+  }
 
-  const compileOutput = truncateOutput(`${compile?.stdout ?? ''}${compile?.stderr ?? ''}`.trim());
+  const compile = data.compile && typeof data.compile === 'object' ? data.compile : null;
+  const run = data.run && typeof data.run === 'object' ? data.run : null;
+  const compileStdout = typeof compile?.stdout === 'string' ? compile.stdout : '';
+  const compileStderr = typeof compile?.stderr === 'string' ? compile.stderr : '';
+
+  const compileOutput = truncateOutput(`${compileStdout}${compileStderr}`.trim());
 
   if (compile && typeof compile.code === 'number' && compile.code !== 0) {
     const line = errorLineFromOutput(compileOutput);
@@ -74,7 +91,7 @@ export function normalizePistonRun(data: PistonResponse, elapsedMs: number): Nor
       stdout: '',
       stderr: '',
       compileOutput,
-      message: data.message || 'The secure provider returned no result.',
+      message: typeof data.message === 'string' ? data.message.slice(0, 300) : 'The secure provider returned no result.',
       time: elapsedMs,
       memory: null,
       exitCode: null,
@@ -84,8 +101,8 @@ export function normalizePistonRun(data: PistonResponse, elapsedMs: number): Nor
     };
   }
 
-  const stdout = truncateOutput(run.stdout ?? '');
-  const stderr = truncateOutput(run.stderr ?? '');
+  const stdout = truncateOutput(typeof run.stdout === 'string' ? run.stdout : '');
+  const stderr = truncateOutput(typeof run.stderr === 'string' ? run.stderr : '');
   const killed = run.signal === 'SIGKILL' || run.signal === 'SIGTERM';
   const exitCode = typeof run.code === 'number' ? run.code : null;
 

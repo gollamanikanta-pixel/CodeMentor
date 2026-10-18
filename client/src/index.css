@@ -1954,6 +1954,17 @@ a:focus-visible,
   border-color: rgba(94, 211, 161, 0.24);
 }
 
+.analysis-run-note {
+  margin: -2px 0 14px;
+  padding: 11px 13px;
+  border: 1px solid rgba(94, 211, 161, 0.24);
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  background: var(--green-wash);
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+
 .summary-icon {
   width: 30px;
   height: 30px;
@@ -3868,7 +3879,7 @@ a:focus-visible,
   display: flex;
   flex-direction: column;
   width: min(390px, calc(100vw - 28px));
-  height: min(620px, calc(100dvh - 40px));
+  height: min(620px, calc(100dvh - 300px));
   overflow: hidden;
   border: 1px solid rgba(169, 120, 255, 0.34);
   border-radius: 19px;
@@ -4178,6 +4189,20 @@ a:focus-visible,
   .ai-chat-composer .btn {
     min-width: 42px;
     padding-inline: 10px;
+  }
+}
+
+@media (min-width: 561px) and (max-width: 840px) {
+  .ai-chat-widget {
+    right: auto;
+    left: 12px;
+    width: min(300px, calc(50vw - 32px));
+  }
+
+  .ai-chat-widget.minimized {
+    right: auto;
+    left: 12px;
+    width: auto;
   }
 }
 

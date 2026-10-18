@@ -1,17 +1,13 @@
-type Request = { requestId: string; sourceCode: string; stdin: string };
+import { BoundedOutputBuffer, boundOutputText } from './outputBuffer';
+
+type RunRequest = { requestId: string; sourceCode: string; stdin: string };
+type PreloadRequest = { type: 'preload'; requestId: string };
+type Request = RunRequest | PreloadRequest;
 
 const PYODIDE_VERSION = 'v0.26.2';
 const PYODIDE_CDN = `https://cdn.jsdelivr.net/pyodide/${PYODIDE_VERSION}/full/`;
 
 let pyodidePromise: Promise<any> | null = null;
-
-/**
- * Pyodide's `batched` writers report one entry per printed line, with the
- * newline already removed, so the newlines have to be put back.
- */
-function joinLines(chunks: string[]): string {
-  return chunks.join('\n');
-}
 
 /**
  * This worker is a module worker, so classic `importScripts` is unavailable.
@@ -21,20 +17,39 @@ function joinLines(chunks: string[]): string {
 async function loadPyodideRuntime() {
   if (!pyodidePromise) {
     self.postMessage({ status: 'preparing', message: 'Preparing Python runtime…' });
-    const module = (await import(/* @vite-ignore */ `${PYODIDE_CDN}pyodide.mjs`)) as any;
-    pyodidePromise = module.loadPyodide({ indexURL: PYODIDE_CDN });
+    pyodidePromise = (async () => {
+      const module = (await import(/* @vite-ignore */ `${PYODIDE_CDN}pyodide.mjs`)) as any;
+      return module.loadPyodide({ indexURL: PYODIDE_CDN });
+    })().catch((error: unknown) => {
+      pyodidePromise = null;
+      throw error;
+    });
   }
   return pyodidePromise;
 }
 
-async function handleRun(event: MessageEvent<Request>) {
-  const started = performance.now();
+async function handlePreload(event: MessageEvent<PreloadRequest>) {
+  try {
+    await loadPyodideRuntime();
+    self.postMessage({ requestId: event.data.requestId, status: 'runtime_ready' });
+  } catch {
+    self.postMessage({
+      requestId: event.data.requestId,
+      status: 'internal_error',
+      message: 'The Python runtime could not be prepared.',
+    });
+  }
+}
+
+async function handleRun(event: MessageEvent<RunRequest>) {
+  let executionStarted: number | null = null;
   // Declared outside the try so a failure can still hand back whatever the
   // learner's program printed before it stopped.
-  const stdout: string[] = [];
-  const stderr: string[] = [];
+  const stdout = new BoundedOutputBuffer();
+  const stderr = new BoundedOutputBuffer();
   try {
     const pyodide = await loadPyodideRuntime();
+    self.postMessage({ requestId: event.data.requestId, status: 'runtime_ready' });
 
     /*
      * Build the input lines. A textarea's value always ends with a newline
@@ -47,10 +62,9 @@ async function handleRun(event: MessageEvent<Request>) {
     const inputLines = rawLines;
     let inputIndex = 0;
 
-    // Pyodide hands `batched` one entry per printed line; joinLines below puts
-    // the newlines back so multi-line programs do not collapse into one line.
-    pyodide.setStdout({ batched: (value: string) => stdout.push(value) });
-    pyodide.setStderr({ batched: (value: string) => stderr.push(value) });
+    // Pyodide reports one entry per printed line, so the buffer restores newlines.
+    pyodide.setStdout({ batched: (value: string) => stdout.write(value) });
+    pyodide.setStderr({ batched: (value: string) => stderr.write(value) });
 
     /*
      * Expose a JS-backed input() so learner programs read stdin lines. When the
@@ -61,33 +75,47 @@ async function handleRun(event: MessageEvent<Request>) {
     pyodide.globals.set('__codementor_next_input', () =>
       inputIndex < inputLines.length ? inputLines[inputIndex++] : null,
     );
-    await pyodide.runPythonAsync(
-      [
-        'import builtins',
-        'def _codementor_input(prompt=""):',
-        '    value = __codementor_next_input()',
-        '    if value is None:',
-        '        raise EOFError("your program asked for input, but Program Input (stdin) has no lines left — add one value per line")',
-        '    print(prompt, end="")',
-        '    print(value)',
-        '    return value',
-        'builtins.input = _codementor_input',
-      ].join('\n'),
-    );
+    pyodide.globals.set('__codementor_source', event.data.sourceCode);
 
-    // The runtime is ready, so the execution timeout can start counting now.
-    self.postMessage({ status: 'running', message: 'Running your program…' });
-
-    // Run the learner's source directly so reported line numbers match it.
-    await pyodide.runPythonAsync(event.data.sourceCode);
+    try {
+      // Give every run a fresh module scope while keeping the downloaded runtime warm.
+      executionStarted = performance.now();
+      self.postMessage({ status: 'running', message: 'Running your program…' });
+      await pyodide.runPythonAsync(
+        [
+          'import builtins as _codementor_builtins',
+          'def _codementor_input(prompt=""):',
+          '    value = __codementor_next_input()',
+          '    if value is None:',
+          '        raise EOFError("your program asked for input, but Program Input (stdin) has no lines left — add one value per line")',
+          '    print(prompt, end="")',
+          '    print(value)',
+          '    return value',
+          '__codementor_run_builtins = dict(vars(_codementor_builtins))',
+          '__codementor_run_builtins["input"] = _codementor_input',
+          '__codementor_scope = {"__name__": "__main__", "__builtins__": __codementor_run_builtins}',
+          'exec(compile(__codementor_source, "<exec>", "exec"), __codementor_scope)',
+        ].join('\n'),
+      );
+    } finally {
+      for (const name of [
+        '__codementor_next_input',
+        '__codementor_source',
+        '_codementor_input',
+        '__codementor_run_builtins',
+        '__codementor_scope',
+      ]) {
+        pyodide.globals.delete(name);
+      }
+    }
 
     self.postMessage({
       requestId: event.data.requestId,
       status: 'success',
-      stdout: joinLines(stdout),
-      stderr: joinLines(stderr),
+      stdout: stdout.toString(),
+      stderr: stderr.toString(),
       message: '',
-      time: performance.now() - started,
+      time: executionStarted === null ? null : performance.now() - executionStarted,
       errorLine: null,
       errorLineConfidence: 'unknown',
     });
@@ -124,11 +152,11 @@ async function handleRun(event: MessageEvent<Request>) {
       requestId: event.data.requestId,
       status: isSyntax ? 'syntax_error' : 'runtime_error',
       // Whatever the program printed before it failed still belongs to the learner.
-      stdout: joinLines(stdout),
+      stdout: stdout.toString(),
       // `stderr` keeps the raw traceback; `message` is the calm one-line summary.
-      stderr: text,
+      stderr: boundOutputText(text),
       message: lastLine.trim().slice(0, 300),
-      time: performance.now() - started,
+      time: executionStarted === null ? null : performance.now() - executionStarted,
       errorLine: deepest,
       errorLineConfidence: deepest ? 'estimated' : 'unknown',
     });
@@ -140,7 +168,11 @@ async function handleRun(event: MessageEvent<Request>) {
  * screen until the timeout fires, so it is reported as a plain internal error.
  */
 self.onmessage = (event: MessageEvent<Request>) => {
-  void handleRun(event).catch((error: unknown) => {
+  if ('type' in event.data && event.data.type === 'preload') {
+    void handlePreload(event as MessageEvent<PreloadRequest>);
+    return;
+  }
+  void handleRun(event as MessageEvent<RunRequest>).catch((error: unknown) => {
     self.postMessage({
       requestId: event.data.requestId,
       status: 'internal_error',

@@ -121,7 +121,7 @@ export const languageConfigs: LanguageConfig[] = [
     monacoLanguage: 'javascript',
     executionMode: 'browser_javascript',
     statusLabel: 'Local browser runner',
-    statusDescription: 'Runs locally in a dedicated browser worker.',
+    statusDescription: 'Runs locally in a network-restricted, isolated browser sandbox.',
     executionEnabled: true,
     analysisSupported: true,
     starter:
