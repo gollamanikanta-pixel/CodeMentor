@@ -8,6 +8,7 @@ import {
 } from '../providers/pistonExecutionProvider.js';
 import {
   buildJudge0Submission,
+  JUDGE0_LANGUAGE_ID,
   JUDGE0_RESOURCE_LIMITS,
 } from '../providers/judge0ExecutionProvider.js';
 import { buildJudge0Capabilities, selectExecutionProvider } from '../providers/index.js';
@@ -81,6 +82,21 @@ test('Judge0 submissions request explicit execution and network limits', () => {
 test('Judge0 applies the same bounded memory limit to Java and other languages', () => {
   assert.equal(buildJudge0Submission('', 103, '').memory_limit, JUDGE0_RESOURCE_LIMITS.memory_limit);
   assert.equal(buildJudge0Submission('', 91, '').memory_limit, JUDGE0_RESOURCE_LIMITS.memory_limit);
+});
+
+test('Judge0 keeps Java within aggregate memory, time, and process limits while allowing HotSpot to start', () => {
+  const java = buildJudge0Submission('', JUDGE0_LANGUAGE_ID.java, '');
+  const c = buildJudge0Submission('', JUDGE0_LANGUAGE_ID.c, '');
+
+  assert.equal(java.memory_limit, JUDGE0_RESOURCE_LIMITS.memory_limit);
+  assert.equal(java.cpu_time_limit, JUDGE0_RESOURCE_LIMITS.cpu_time_limit);
+  assert.equal(java.wall_time_limit, JUDGE0_RESOURCE_LIMITS.wall_time_limit);
+  assert.equal(java.enable_network, false);
+  assert.equal(java.enable_per_process_and_thread_time_limit, true);
+  assert.equal(java.enable_per_process_and_thread_memory_limit, false);
+  assert.equal(java.max_processes_and_or_threads, 64);
+  assert.equal(c.enable_per_process_and_thread_memory_limit, true);
+  assert.equal(c.max_processes_and_or_threads, JUDGE0_RESOURCE_LIMITS.max_processes_and_or_threads);
 });
 
 test('Judge0 capability report reflects the Java readiness probe', () => {

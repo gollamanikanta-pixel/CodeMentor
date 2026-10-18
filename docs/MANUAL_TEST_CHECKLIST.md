@@ -119,6 +119,7 @@ row says otherwise.
 - [ ] Syntax/runtime errors report useful output; infinite loops time out and Stop terminates the active worker or sandbox frame.
 - [ ] JavaScript cannot read the app DOM, cookies, or storage, and attempts to use fetch, WebSocket, images, forms, or nested frames are blocked.
 - [ ] C, C++, and Java show the secure-runner readiness state and run from the single-file Playground only when their capability is ready.
+- [ ] Java prints the starter output without a false unavailable state; Java stdin, 256 MB aggregate memory limit, time limit and disabled network setting are preserved.
 - [ ] C, C++, and Java source and stdin are sent to the configured isolated service only after the learner chooses Run Code.
 - [ ] A deliberately broken C program (a missing `;`) returns `compilation_error` with the compiler output and the reported line — a learning signal, never a fix or a patch.
 - [ ] HTML Run Preview works in the sandboxed browser preview; the console Run Code action remains disabled for HTML.
