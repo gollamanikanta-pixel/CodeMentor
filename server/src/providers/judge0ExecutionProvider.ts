@@ -56,6 +56,15 @@ export function buildJudge0Submission(source: string, languageId: number, stdin:
     language_id: languageId,
     stdin,
     ...JUDGE0_RESOURCE_LIMITS,
+    ...(languageId === JUDGE0_LANGUAGE_ID.java
+      ? {
+          // HotSpot reserves a 1 GiB compressed class space; per-process
+          // address-space limits prevent the VM from starting. The aggregate
+          // Judge0 memory cap remains enforced for the whole sandbox job.
+          enable_per_process_and_thread_memory_limit: false,
+          max_processes_and_or_threads: 64,
+        }
+      : {}),
   };
 }
 
