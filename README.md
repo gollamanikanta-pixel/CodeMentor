@@ -11,7 +11,7 @@ CodeMentor **guides, it never auto-fixes**. It explains errors, highlights likel
 ## 1. Features
 
 - **Playground workspace** — collapsible sidebar, Monaco editor, analysis panel, bottom console, and a sticky action toolbar.
-- **Console runners** — Python runs in a browser worker and JavaScript runs in a dedicated worker created inside a network-restricted, opaque-origin sandbox frame; CodeMentor does not send their source to a remote execution service. C, C++ and Java run through the configured isolated execution service when each language is reported ready. Their source and stdin are sent only after the learner chooses **Run Code**. Python downloads Pyodide from jsDelivr, and Python programs may make their own network requests. HTML uses a sandboxed browser preview.
+- **Console runners** — Python runs in a warm browser worker and JavaScript runs in a dedicated worker created inside a network-restricted, opaque-origin sandbox frame; CodeMentor does not send their source to a remote execution service. C, C++ and Java run through the configured isolated execution service when each language is reported ready. Their source and stdin are sent only after the learner chooses **Run Code**. Python preloads Pyodide from jsDelivr when selected and reuses the runtime between runs, while giving each run a fresh global namespace. Python programs may make their own network requests. HTML uses a sandboxed browser preview.
 - **Local analysis** — rule-based guidance runs locally without AI, network access or code rewriting. Analyzer code for coming-soon languages remains internal and is not exposed as a supported language choice.
 - **Errors & Learning Hints** — category badge, likely line with confidence, technical message, what happened, why, progressive hints, concept reminder, self-check question and debugging steps.
 - **Local visuals** — accessible SVG data-structure diagrams plus safe Mermaid flowcharts generated from detected structure.
@@ -125,7 +125,7 @@ codementor/
 ### Data flow
 
 1. The learner edits code in the browser. Autosave writes a local draft only — no run, no AI, and no account project is changed until explicit save.
-2. **Run Code** executes Python in a dedicated browser worker and JavaScript in a dedicated worker created inside a network-restricted, opaque-origin sandbox frame. Program execution stays in the browser; Python downloads its Pyodide runtime from jsDelivr. Stdin is supplied in **Program Input**. The local runner enforces a 50 KB source limit, a 10 KB input limit, a 45-second runtime bootstrap limit, a 3-second execution limit and a 20,000-character cap for each output stream.
+2. **Run Code** executes Python in a reusable browser worker and JavaScript in a dedicated worker created inside a network-restricted, opaque-origin sandbox frame. Program execution stays in the browser; Python preloads the Pyodide runtime from jsDelivr when Python is selected and keeps it warm between runs. Stdin is supplied in **Program Input**. The local runner enforces a 50 KB source limit, a 10 KB input limit, a 45-second runtime bootstrap limit, a 3-second execution limit and a 20,000-character cap for each output stream.
 3. The local analyzer runs **in the browser** and produces the `LocalAnalysis` object (summary, concepts, line explanations, errors, hints, tips, diagram, quiz readiness).
    Run results and local hints are separate: a successful execution can still have a potential edge-case hint. The UI labels it as a suggestion, not a failure from that run.
 4. The UI renders Analysis, Visuals and Quiz from that object.
@@ -217,7 +217,7 @@ Coming-soon source files are not accepted by the single-file Playground upload. 
 
 ## 7. Local browser runners
 
-Python and JavaScript run locally in the browser and do not use the hosted terminal service. Supply input in the Playground's **Program Input** panel before running. Python runs in a Web Worker and loads a pinned Pyodide runtime from jsDelivr on first use; Python code may make its own network requests. JavaScript runs in a dedicated worker created by an `allow-scripts` iframe without `allow-same-origin`; the worker inherits the iframe's opaque origin and restrictive CSP, blocking network connections and external resources. Neither runner uploads source or input to a remote execution service.
+Python and JavaScript run locally in the browser and do not use the hosted terminal service. Supply input in the Playground's **Program Input** panel before running. Python runs in a reusable Web Worker, preloads the pinned Pyodide runtime from jsDelivr when selected, and starts each program in a fresh global namespace; Python code may make its own network requests. JavaScript runs in a dedicated worker created by an `allow-scripts` iframe without `allow-same-origin`; the worker inherits the iframe's opaque origin and restrictive CSP, blocking network connections and external resources. Neither runner uploads source or input to a remote execution service.
 
 ## 8. Secure remote execution
 
@@ -414,7 +414,7 @@ See [`docs/TESTING.md`](docs/TESTING.md) and [`docs/MANUAL_TEST_CHECKLIST.md`](d
 
 | Symptom | Fix |
 | --- | --- |
-| Python is still preparing the local runtime | Check the connection to jsDelivr; Pyodide is downloaded from its CDN on first use. |
+| Python is still preparing the local runtime | Check the connection to jsDelivr; Pyodide is downloaded when Python is selected and reused between completed runs. |
 | Program input is not received | Add one input value per line under **Program Input** before starting the run. |
 | “AI Deep Help is not configured” | Expected without AI keys. All local features still work. |
 | “Secure execution is not configured…” in multi-file workspace | Configure the optional `EXECUTION_*` provider settings; single-file Python/JavaScript runs do not use that provider. |
@@ -425,7 +425,7 @@ See [`docs/TESTING.md`](docs/TESTING.md) and [`docs/MANUAL_TEST_CHECKLIST.md`](d
 
 **Known limitations**
 
-- Python loads its pinned Pyodide runtime from jsDelivr on first use; the learner's program can access browser network APIs.
+- Python preloads its pinned Pyodide runtime from jsDelivr when selected, reuses it between runs, and starts each run in a fresh global namespace; the learner's program can access browser network APIs.
 - The optional legacy E2B terminal is not used by the single-file Playground; E2B plan limits and charges may apply if that service is explicitly enabled elsewhere.
 - Monaco loads from a CDN in development; production builds should bundle or self-host it.
 - The default Judge0 CE runner is a **public** service with a fair-use rate limit (roughly one request per second). CodeMentor's shared cooldown keeps normal learning under it; heavy or classroom use should host a private Judge0/Piston instance. Judge0 CE compiles a single source file per run, so multi-file projects execute their entry file.
@@ -468,7 +468,7 @@ misrepresented.
 - Settings API: `GET`/`PUT /api/settings` round-trip, and signing in adopts the account's saved theme (verified: server `light` applied on login).
 - Cancel endpoint answers honestly (`Execution job not found.` for an unknown id).
 - **Spec-parity audit (before the interactive-runner change):** historical browser checks covered the prior execution flow. The current interactive flow authenticates the signed-in session, Origin and CSRF token; the API proxies to a separately authenticated runner.
-- **Current single-file runner validation:** Python uses a browser worker and JavaScript uses a network-restricted sandbox frame; automated client tests and the production build pass. Confirm first-use Pyodide loading from jsDelivr in the target browser.
+- **Current single-file runner validation:** Python uses a reusable browser worker with per-run global isolation, and JavaScript uses a network-restricted sandbox frame; automated client tests and the production build pass. Confirm Pyodide preload and repeat-run behavior from jsDelivr in the target browser.
 
 **Previous remote-provider verification (multi-file execution)**
 

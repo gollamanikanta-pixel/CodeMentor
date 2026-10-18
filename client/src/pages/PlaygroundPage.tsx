@@ -36,6 +36,7 @@ import {
   languageNames,
 } from '../data/languages';
 import { saveProject as persistProject } from '../projects/projectStore';
+import { preparePythonRuntime } from '../runners/browserRunner';
 import {
   createProject,
   createProjectFile,
@@ -97,6 +98,16 @@ export function PlaygroundPage() {
     : config?.statusDescription;
   const statusTone = canRun ? 'amber' : config?.analysisSupported ? 'amber' : 'neutral';
   const markers = useMemo(() => markersFromAnalysis(playground.analysis, playground.execution), [playground.analysis, playground.execution]);
+
+  useEffect(() => {
+    if (language !== 'Python') return;
+    try {
+      preparePythonRuntime();
+    } catch (error) {
+      console.warn('python-runtime-preload-failed', error);
+    }
+  }, [language]);
+
   const revealAnalysis = useCallback(() => {
     document.getElementById('learning-analysis')?.scrollIntoView({ behavior: 'instant', block: 'start' });
   }, []);

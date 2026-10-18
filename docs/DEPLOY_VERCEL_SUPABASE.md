@@ -13,8 +13,9 @@ This is the production deployment path for this repository:
 No Railway service is required for the Vercel + Supabase deployment. The
 interactive terminal needs a long-running WebSocket-capable host and therefore
 is not used by the single-file Playground. Python and JavaScript run locally in
-the browser; Python downloads Pyodide from jsDelivr on first use and Python
-programs may make their own network requests. JavaScript runs in a
+the browser; Python preloads Pyodide from jsDelivr when selected and reuses the
+warm runtime between completed runs. Each Python run uses a fresh global
+namespace. Python programs may make their own network requests. JavaScript runs in a
 network-restricted, opaque-origin iframe. Single-request Judge0 execution for
 multi-file projects is a separate feature.
 

@@ -55,8 +55,9 @@ const SECTIONS: Array<{ icon: typeof BookOpen; title: string; body: ReactNode }>
     title: 'Browser-based execution',
     body: (
       <p>
-        {localRunnerLanguages.join(' and ')} run in isolated browser runtimes, so their source is not uploaded to an execution service. Python runs in a
-        worker and downloads its Pyodide runtime from jsDelivr; Python programs can make their own network requests. JavaScript runs in a
+        {localRunnerLanguages.join(' and ')} run in isolated browser runtimes, so their source is not uploaded to an execution service. Python preloads
+        Pyodide from jsDelivr when selected and reuses the runtime between runs with a fresh global namespace each time; Python programs can make
+        their own network requests. JavaScript runs in a
         worker inside a sandboxed iframe with network access blocked. Add standard input before running. HTML/CSS/JavaScript web projects are rendered
         in a separate sandboxed browser preview. C, C++, and Java run through the configured isolated execution service when it reports
         the language ready; their source and input are sent only after you choose Run Code.

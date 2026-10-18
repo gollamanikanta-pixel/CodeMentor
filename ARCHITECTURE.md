@@ -40,8 +40,9 @@ carries `correctedCode`, `fixedCode`, `correctedLine`, `applyFix`, `patch` or
 2. **Run Code** executes Python in a local browser worker and JavaScript in a
    dedicated worker created by a network-restricted, opaque-origin sandbox
    frame, with pre-supplied stdin; HTML preview stays in a separate sandboxed
-   browser iframe. Python downloads Pyodide from jsDelivr, and Python code can
-   make network requests.
+   browser iframe. Python preloads Pyodide from jsDelivr when selected, reuses
+   the runtime between runs, and gives each run a fresh global namespace;
+   Python code can make network requests.
 3. The local analyzer runs in the browser and produces a `LocalAnalysis`.
 4. Analysis, visuals and quiz questions are generated locally. On completion,
    a signed-in learner's quiz result is saved through the protected API.

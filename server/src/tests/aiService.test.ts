@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   callWithOutputRepair,
+  fetchWithUnavailableRetry,
   geminiOpenAiEndpoint,
   isGeminiOpenAiCompatible,
   parseChatProviderResponse,
@@ -126,6 +127,67 @@ test('provider request failures are not retried as JSON repairs', async () => {
     ),
     (caught) => caught === error,
   );
+  assert.equal(calls, 1);
+});
+
+test('AI provider HTTP 503 is retried once and returns the recovered response', async () => {
+  let calls = 0;
+  const response = await fetchWithUnavailableRetry(
+    async () => {
+      calls += 1;
+      return calls === 1
+        ? new Response('temporarily unavailable', { status: 503 })
+        : new Response('recovered', { status: 200 });
+    },
+    new AbortController().signal,
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(await response.text(), 'recovered');
+  assert.equal(calls, 2);
+});
+
+test('persistent provider HTTP 503 is not retried indefinitely', async () => {
+  let calls = 0;
+  const response = await fetchWithUnavailableRetry(
+    async () => {
+      calls += 1;
+      return new Response('temporarily unavailable', { status: 503 });
+    },
+    new AbortController().signal,
+  );
+
+  assert.equal(response.status, 503);
+  assert.equal(calls, 2);
+});
+
+test('other provider HTTP statuses are not retried', async () => {
+  let calls = 0;
+  const response = await fetchWithUnavailableRetry(
+    async () => {
+      calls += 1;
+      return new Response('rate limited', { status: 429 });
+    },
+    new AbortController().signal,
+  );
+
+  assert.equal(response.status, 429);
+  assert.equal(calls, 1);
+});
+
+test('provider retry delay respects the request abort signal', async () => {
+  const controller = new AbortController();
+  let calls = 0;
+  const retry = fetchWithUnavailableRetry(
+    async () => {
+      calls += 1;
+      return new Response('temporarily unavailable', { status: 503 });
+    },
+    controller.signal,
+  );
+  setTimeout(() => controller.abort(), 20);
+
+  await assert.rejects(retry, (error: unknown) => error instanceof Error && error.name === 'AbortError');
   assert.equal(calls, 1);
 });
 

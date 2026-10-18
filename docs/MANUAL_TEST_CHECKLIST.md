@@ -44,7 +44,8 @@ row says otherwise.
 ## 4. Python runner
 
 - [ ] Load the Python starter and click **Run Code** → output shows `Class average: 84.25` and status `success`.
-- [ ] First run shows “Preparing Python runtime…” in the console.
+- [ ] Selecting Python starts loading Pyodide; the first run shows “Preparing Python runtime…” only if loading is still in progress.
+- [ ] A second run reuses the warmed runtime, and variables defined in one run are not visible to the next run.
 - [ ] Paste a program using `input()` and put values in **Program Input (stdin)** one per line → values are read in order.
 - [ ] Introduce a `NameError` → console **Errors** tab shows it and the analyzer adds a learning error.
 - [ ] Introduce a syntax error (e.g. a missing parenthesis) → `syntax_error` with a possible line.
@@ -113,7 +114,7 @@ row says otherwise.
 ## 12. Available runners
 
 - [ ] Python and JavaScript run locally without a hosted execution service; JavaScript runs in an opaque-origin iframe with network access blocked.
-- [ ] Python loads Pyodide from jsDelivr on first use and reports a clear error if runtime bootstrap fails.
+- [ ] Python preloads Pyodide from jsDelivr when selected and reports a clear error if runtime bootstrap fails.
 - [ ] Program Input values are echoed and consumed in order; multiple values and missing input behave predictably.
 - [ ] Syntax/runtime errors report useful output; infinite loops time out and Stop terminates the active worker or sandbox frame.
 - [ ] JavaScript cannot read the app DOM, cookies, or storage, and attempts to use fetch, WebSocket, images, forms, or nested frames are blocked.
@@ -129,6 +130,7 @@ row says otherwise.
 - [ ] “Ask AI for Deeper Help” opens a dialog showing provider readiness or the honest unconfigured state.
 - [ ] With no AI keys: the dialog explains everything local remains available; confirming returns the safe message.
 - [ ] With keys configured: requests are available on demand without an app-imposed daily cap or cooldown; Gemini's own quotas and billing still apply.
+- [ ] A recovered HTTP 503 from the AI provider is retried once; a persistent HTTP 503 returns a safe unavailable message without looping.
 - [ ] Repeating the identical request returns `cached: true` and reuses the saved explanation.
 - [ ] AI is never called on load, typing, tab switch, theme change, save, local analysis, visual/quiz generation, or upload (verify in the Network panel).
 
